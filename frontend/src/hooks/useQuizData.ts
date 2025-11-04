@@ -30,9 +30,9 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       return;
     }
 
-    // Debounce: Prevent rapid-fire requests (wait 500ms between fetches)
+    // Debounce: Prevent rapid-fire requests (wait 200ms between fetches)
     const now = Date.now();
-    if (!forceRefresh && now - lastFetchRef.current < 500) {
+    if (!forceRefresh && now - lastFetchRef.current < 200) {
       console.log('[LearnCheck] Debouncing preference fetch...');
       return;
     }
@@ -89,10 +89,10 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
           clearTimeout(fetchTimeoutRef.current);
         }
         
-        // Debounced refetch after 800ms (give backend time to save)
+        // Immediate refetch (give backend 300ms to save)
         fetchTimeoutRef.current = setTimeout(() => {
           fetchPreferences(true);
-        }, 800);
+        }, 300);
       }
     };
 
@@ -113,7 +113,7 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       console.log('[LearnCheck] Starting preference polling...');
       pollInterval = setInterval(() => {
         fetchPreferences();
-      }, 3000); // Poll every 3 seconds
+      }, 500); // Poll every 500ms for near real-time updates
     };
 
     const stopPolling = () => {
