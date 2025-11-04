@@ -14,7 +14,7 @@ export const getRedisClient = (): Redis | null => {
   }
 
   // Reuse existing connection
-  if (redis) {
+  if (redis && redis.status === 'ready') {
     return redis;
   }
 
@@ -26,17 +26,20 @@ export const getRedisClient = (): Redis | null => {
         return delay;
       },
       // Vercel serverless timeout is 10s, so set shorter timeout
-      connectTimeout: 3000,
-      lazyConnect: true, // Don't connect immediately
+      connectTimeout: 5000,
+      lazyConnect: false, // Connect immediately for serverless
     });
 
     redis.on('error', (err) => {
       console.error('[Redis] Connection error:', err.message);
+      // Reset redis on error so next call will create new connection
+      redis = null;
     });
 
     redis.on('connect', () => {
       console.log('[Redis] Connected successfully');
     });
+
 
     return redis;
   } catch (error) {
@@ -57,7 +60,6 @@ export const cacheQuizData = async (
   if (!client) return false;
 
   try {
-    await client.connect();
     const key = `learncheck:quiz:tutorial:${tutorialId}`;
     const value = JSON.stringify({
       ...quizData,
@@ -85,7 +87,6 @@ export const getCachedQuizData = async (
   if (!client) return null;
 
   try {
-    await client.connect();
     const key = `learncheck:quiz:tutorial:${tutorialId}`;
     const cached = await client.get(key);
     
@@ -114,7 +115,6 @@ export const cacheUserPreferences = async (
   if (!client) return false;
 
   try {
-    await client.connect();
     const key = `learncheck:prefs:user:${userId}`;
     const value = JSON.stringify({
       ...preferences,
@@ -142,7 +142,6 @@ export const getCachedUserPreferences = async (
   if (!client) return null;
 
   try {
-    await client.connect();
     const key = `learncheck:prefs:user:${userId}`;
     const cached = await client.get(key);
     
@@ -172,7 +171,6 @@ export const isRateLimited = async (
   if (!client) return false; // No rate limiting if Redis unavailable
 
   try {
-    await client.connect();
     const key = `learncheck:ratelimit:${userId}`;
     
     // Increment counter
@@ -206,7 +204,6 @@ export const invalidateTutorialCache = async (
   if (!client) return false;
 
   try {
-    await client.connect();
     const key = `learncheck:quiz:tutorial:${tutorialId}`;
     await client.del(key);
     console.log(`[Redis] Invalidated cache for tutorial ${tutorialId}`);
