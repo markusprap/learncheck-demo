@@ -1,35 +1,57 @@
-
 import axios from 'axios';
 
+const DICODING_API_BASE_URL = 'https://learncheck-dicoding-mock-666748076441.europe-west1.run.app/api';
+
 const dicodingApi = axios.create({
-  baseURL: process.env.DICODING_MOCK_API_URL || 'http://localhost:4000',
+  baseURL: DICODING_API_BASE_URL,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// TODO: Replace with actual API call to Dicoding Mock API
 export const getTutorialContent = async (tutorialId: string): Promise<string> => {
-  console.log(`Fetching tutorial content for ID: ${tutorialId}`);
-  // Mock response for now
-  return Promise.resolve(`
-    <html>
-      <head><title>Mock Tutorial</title></head>
-      <body>
-        <h1>Introduction to React Hooks</h1>
-        <p>React Hooks are functions that let you “hook into” React state and lifecycle features from function components.</p>
-        <p>The most commonly used hooks are useState and useEffect. useState allows you to add state to functional components. useEffect allows you to perform side effects in functional components.</p>
-        <p>For example, to declare a state variable called 'count', you would write: const [count, setCount] = useState(0);</p>
-      </body>
-    </html>
-  `);
+  try {
+    console.log('[Dicoding API] Fetching tutorial content for ID:', tutorialId);
+    
+    const response = await dicodingApi.get('/tutorials/' + tutorialId);
+    const htmlContent = response.data?.data?.content;
+    
+    if (!htmlContent || typeof htmlContent !== 'string') {
+      throw new Error('Invalid response format from Dicoding API: missing content field');
+    }
+    
+    console.log('[Dicoding API] Successfully fetched tutorial content');
+    return htmlContent;
+    
+  } catch (error: any) {
+    console.error('[Dicoding API] Error fetching tutorial content:', error.message);
+    if (error.response) {
+      console.error('[Dicoding API] Response status:', error.response.status);
+    }
+    throw new Error('Failed to fetch tutorial content: ' + error.message);
+  }
 };
 
-// TODO: Replace with actual API call to Dicoding Mock API
 export const getUserPreferences = async (userId: string): Promise<any> => {
-  console.log(`Fetching user preferences for ID: ${userId}`);
-  // Mock response for now
-  return Promise.resolve({
-    theme: 'dark',
-    fontSize: 'large',
-    layoutWidth: 'fullWidth',
-    fontStyle: 'default',
-  });
+  try {
+    console.log('[Dicoding API] Fetching user preferences for ID:', userId);
+    
+    const response = await dicodingApi.get('/users/' + userId + '/preferences');
+    const preferences = response.data?.data?.preference;
+    
+    if (!preferences || typeof preferences !== 'object') {
+      throw new Error('Invalid response format from Dicoding API: missing preference field');
+    }
+    
+    console.log('[Dicoding API] Successfully fetched user preferences');
+    return preferences;
+    
+  } catch (error: any) {
+    console.error('[Dicoding API] Error fetching user preferences:', error.message);
+    if (error.response) {
+      console.error('[Dicoding API] Response status:', error.response.status);
+    }
+    throw new Error('Failed to fetch user preferences: ' + error.message);
+  }
 };

@@ -4,6 +4,7 @@ import assessmentRouter from './assessment.routes';
 
 const router = Router();
 
-router.use('/assessment', assessmentRouter);
+// Mount assessment routes (includes /preferences and /assessment)
+router.use('/', assessmentRouter);
 
 export default router;

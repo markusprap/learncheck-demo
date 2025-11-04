@@ -1,13 +1,14 @@
 
 import React from 'react';
 import { twMerge } from 'tailwind-merge';
-import { clsx, ClassValue } from 'clsx';
+import { clsx } from 'clsx';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost';
+  size?: 'default' | 'sm' | 'lg';
 }
 
-const Button: React.FC<ButtonProps> = ({ className, variant = 'primary', ...props }) => {
+const Button: React.FC<ButtonProps> = ({ className, variant = 'primary', size = 'default', ...props }) => {
   const baseStyles = 'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none data-[state=open]:bg-slate-100 dark:data-[state=open]:bg-slate-800';
 
   const variants = {
@@ -16,8 +17,14 @@ const Button: React.FC<ButtonProps> = ({ className, variant = 'primary', ...prop
     ghost: 'bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-50 dark:hover:text-slate-50 data-[state=open]:bg-transparent dark:data-[state=open]:bg-transparent',
   };
 
+  const sizes = {
+    default: 'h-10 py-2 px-4',
+    sm: 'h-9 px-3 rounded-md',
+    lg: 'h-11 px-8 rounded-md text-base'
+  };
+
   return (
-    <button className={twMerge(clsx(baseStyles, variants[variant], className))} {...props} />
+    <button className={twMerge(clsx(baseStyles, variants[variant], sizes[size], className))} {...props} />
   );
 };
 

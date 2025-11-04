@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LearnCheck Iframe Embed Demo - Dicoding Classroom</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f8fafc;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            color: #1e293b;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: #64748b;
+            font-size: 1rem;
+        }
+        
+        .tutorial-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .tutorial-content h2 {
+            color: #1e293b;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .tutorial-content p {
+            color: #475569;
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+        
+        .quiz-embed {
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .quiz-embed h3 {
+            color: #1e293b;
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            padding: 0 1rem;
+        }
+        
+        .iframe-container {
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+            display: block;
+        }
+        
+        .embed-info {
+            background: #f1f5f9;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        
+        .embed-info code {
+            background: #e2e8f0;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            color: #1e293b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 Dicoding Classroom - Tutorial AI</h1>
+            <p>Belajar Dasar AI - Tutorial #35363</p>
+        </div>
+        
+        <div class="tutorial-content">
+            <h2>Penerapan AI dalam Dunia Nyata</h2>
+            <p>
+                Mari kita mulai pembelajaran ini dengan mengenal penerapan AI di dunia nyata. 
+                Menurut laporan McKinsey yang berjudul "The state of AI in 2022", rata-rata 
+                penggunaan AI di industri meningkat dua kali lipat dari 20% pada tahun 2017 
+                menjadi 50% pada tahun 2022.
+            </p>
+            <p>
+                Laporan tersebut juga menyatakan bahwa 31% industri memanfaatkan teknologi AI 
+                untuk meningkatkan kualitas produk dan layanan mereka. Hal ini menunjukkan 
+                bahwa penerapan AI sudah ada di berbagai bidang industri saat ini.
+            </p>
+        </div>
+        
+        <div class="quiz-embed">
+            <h3>✨ Cek Pemahaman dengan AI Quiz</h3>
+            
+            <div class="iframe-container">
+                <!-- LearnCheck Iframe Embed -->
+                <iframe 
+                    src="http://localhost:5173?tutorial_id=35363&user_id=1" 
+                    title="LearnCheck AI Quiz"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    loading="lazy">
+                </iframe>
+            </div>
+            
+            <div class="embed-info">
+                <strong>📌 Embed Code:</strong><br>
+                <code>&lt;iframe src="http://localhost:5173?tutorial_id=35363&user_id=1" width="100%" height="600"&gt;&lt;/iframe&gt;</code>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

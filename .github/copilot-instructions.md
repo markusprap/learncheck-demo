@@ -1,49 +1,76 @@
 # LearnCheck! AI Coding Assistant Guide
 
-This guide provides essential information for AI coding assistants to effectively contribute to the LearnCheck! codebase.
+Essential knowledge for AI agents working with the LearnCheck! codebase.
 
 ## Architecture Overview
 
-This is a full-stack monorepo with a React frontend and a Node.js/Express backend.
+**Dual Frontend Setup**: This monorepo has TWO frontend implementations:
+1. **Root (`index.tsx`)**: 797-line single-file React app with embedded services - used for quick prototyping
+2. **`frontend/` directory**: Structured React app with proper separation of concerns - production implementation
 
--   **Frontend**: Located in the root directory and `frontend/`. It's built with React, Vite, and TypeScript. State management is handled by Zustand (`frontend/src/store/useQuizStore.ts`). UI components are in `frontend/src/components/`.
--   **Backend**: Located in the `backend/` directory. It's a Node.js/Express application written in TypeScript. It provides a REST API for the frontend.
--   **AI Integration**: The backend uses the Google Gemini API for generating assessments. The core logic is in `backend/src/services/gemini.service.ts`.
--   **Data Flow**: The frontend calls the backend API. The backend may call external services (like Dicoding for content, handled in `backend/src/services/dicoding.service.ts`) and the Gemini API, then returns the processed data to the frontend.
+**Backend**: Node.js/Express API in `backend/` providing assessment generation endpoints.
+
+**Data Flow**: Frontend → Backend API (`/api/v1/assessment`) → Dicoding Service (content scraping) + Gemini API (question generation) → Frontend
+
+**Deployment**: Vercel-optimized monorepo. `vercel.json` rewrites `/api/*` to backend, all else to frontend.
+
+## Critical Patterns
+
+### Gemini API Integration (`backend/src/services/gemini.service.ts`)
+- Uses `@google/genai` package (NOT `@google/generative-ai`)
+- API initialization: `new GoogleGenAI({apiKey: process.env.GEMINI_API_KEY})`
+- Structured output with JSON schema using `Type` enum for validation
+- Model call: `ai.models.generateContent()` with `responseMimeType: "application/json"`
+- Generates 3 Indonesian multiple-choice questions with specific explanation format
+
+### State Management (`frontend/src/store/useQuizStore.ts`)
+- **Zustand with dynamic localStorage keys**: Uses `storageKey` pattern `learncheck-${userId}-${tutorialId}`
+- **Critical**: `initialize()` method must be called before quiz starts to set correct storage key and load persisted progress
+- Custom storage proxy (`dynamicStorage`) allows per-user/per-tutorial state isolation
+- State includes: questions, currentQuestionIndex, selectedAnswers, quizOver, revealAnswers
+
+### Backend Service Architecture
+- **Parallel data fetching**: `assessment.service.ts` uses `Promise.all()` to fetch tutorial content and user preferences simultaneously
+- **HTML parsing**: `cheerio` library extracts clean text from Dicoding HTML (see `htmlParser.ts`)
+- **Route structure**: `/api/v1` prefix in `app.ts`, routes organized in `routes/index.ts`
 
 ## Developer Workflow
 
-### Environment Setup
+**Environment Setup**:
+```bash
+# Root .env.local (for root frontend)
+GEMINI_API_KEY=your_key_here
 
-1.  **API Keys**: You need a Gemini API key.
-2.  Create a `.env.local` file in the root directory and add `GEMINI_API_KEY=your_key_here`.
-3.  Create a `.env` file in the `backend/` directory and add `GEMINI_API_KEY=your_key_here`.
+# backend/.env (for backend)
+GEMINI_API_KEY=your_key_here
+```
 
-### Running the Application
+**Running Locally**:
+```bash
+# Frontend (production structure)
+cd frontend && npm install && npm run dev
 
--   **Frontend (Root)**:
-    -   Install dependencies: `npm install`
-    -   Run dev server: `npm run dev` (http://localhost:3000)
+# Backend (separate terminal)
+cd backend && npm install && npm run dev
 
--   **Backend**:
-    -   `cd backend`
-    -   Install dependencies: `npm install`
-    -   Run dev server: `npm run dev`
+# Root frontend (prototyping)
+npm install && npm run dev  # runs on port 3000
+```
 
-### Building for Production
+**Backend serves**: `http://localhost:PORT` (see `backend/src/index.ts` - exports app for Vercel, no explicit listen)
 
--   **Frontend**: `npm run build`
--   **Backend**: `cd backend && npm run build`
+## Vercel Deployment Config
 
-## Key Files and Conventions
+`vercel.json` defines:
+- Backend build: `backend/src/index.ts` with `@vercel/node`
+- Frontend build: `frontend/package.json` with `@vercel/static-build`
+- Rewrites: `/api/*` → backend, `/*` → frontend static files
 
--   **API Routes**: Backend routes are defined in `backend/src/routes/`. The main routes for assessments are in `backend/src/routes/assessment.routes.ts`.
--   **Services**: Business logic is encapsulated in services in `backend/src/services/`.
-    -   `assessment.service.ts`: Orchestrates the assessment generation process.
-    -   `gemini.service.ts`: Handles all interactions with the Gemini API.
-    -   `dicoding.service.ts`: Fetches or scrapes data from the Dicoding platform, using `utils/htmlParser.ts`.
--   **State Management (Frontend)**: The `frontend/src/store/useQuizStore.ts` file manages the global state for the quiz using Zustand. When adding new state related to the quiz, modify this file.
--   **API Calls (Frontend)**: All frontend API calls to the backend are centralized in `frontend/src/services/api.ts`.
--   **Error Handling**: The backend uses a centralized error handler in `backend/src/utils/errorHandler.ts`.
+**Important**: Backend `index.ts` exports the Express app directly (no `app.listen()`) for Vercel serverless functions.
 
-When working on the codebase, please adhere to these patterns and conventions.
+## Key Files
+
+- **Types**: `frontend/src/types.ts` defines `Question`, `AssessmentData`, `UserPreferences`
+- **API client**: `frontend/src/services/api.ts` - axios instance with `/api/v1` base URL
+- **Quiz hook**: `frontend/src/hooks/useQuizData.ts` - fetches assessment data with query params `tutorial_id`, `user_id`
+- **Error handling**: `backend/src/utils/errorHandler.ts` - Express error middleware returning 500 with error message

@@ -7,6 +7,7 @@ type QuizState = {
   questions: Question[];
   currentQuestionIndex: number;
   selectedAnswers: { [questionId: string]: string };
+  submittedAnswers: { [questionId: string]: boolean };
   quizOver: boolean;
   revealAnswers: boolean; // To control showing correct/incorrect answers per question
   storageKey: string;
@@ -15,7 +16,9 @@ type QuizState = {
 type QuizActions = {
   setQuestions: (questions: Question[]) => void;
   selectAnswer: (questionId: string, optionId: string) => void;
+  submitAnswer: (questionId: string) => void;
   nextQuestion: () => void;
+  finishQuiz: () => void;
   reset: () => void;
   initialize: (userId: string, tutorialId: string) => void;
 };
@@ -51,6 +54,7 @@ export const useQuizStore = create<QuizState & QuizActions>()(
         questions: [],
         currentQuestionIndex: 0,
         selectedAnswers: {},
+        submittedAnswers: {},
         quizOver: false,
         revealAnswers: false,
         storageKey: 'quiz-storage',
@@ -78,6 +82,7 @@ export const useQuizStore = create<QuizState & QuizActions>()(
             // Set defaults, then overwrite with any saved progress
             currentQuestionIndex: 0,
             selectedAnswers: {},
+            submittedAnswers: {},
             quizOver: false,
             ...savedState,
             // Non-persisted state should always be reset
@@ -92,6 +97,7 @@ export const useQuizStore = create<QuizState & QuizActions>()(
         }),
 
         selectAnswer: (questionId, optionId) => {
+          if (get().submittedAnswers[questionId]) return;
           set((state) => ({
             selectedAnswers: {
               ...state.selectedAnswers,
@@ -100,30 +106,34 @@ export const useQuizStore = create<QuizState & QuizActions>()(
           }));
         },
 
+        submitAnswer: (questionId) => {
+          set((state) => ({
+            submittedAnswers: {
+              ...state.submittedAnswers,
+              [questionId]: true,
+            },
+          }));
+        },
+
         nextQuestion: () => {
           const { currentQuestionIndex, questions } = get();
-
-          // Reveal answers for the current question
-          set({ revealAnswers: true });
-
-          // Delay moving to the next question to let user see feedback
-          setTimeout(() => {
-              if (currentQuestionIndex < questions.length - 1) {
-                  set((state) => ({
-                    currentQuestionIndex: state.currentQuestionIndex + 1,
-                    revealAnswers: false, // Hide feedback for the next question
-                  }));
-              } else {
-                  set({ quizOver: true, revealAnswers: false });
-              }
-          }, 1200);
+          if (currentQuestionIndex < questions.length - 1) {
+              set((state) => ({
+                currentQuestionIndex: state.currentQuestionIndex + 1,
+              }));
+          } else {
+              set({ quizOver: true });
+          }
         },
+
+        finishQuiz: () => set({ quizOver: true }),
 
         reset: () => {
           // Keep the storageKey, but reset progress.
           set({
             currentQuestionIndex: 0,
             selectedAnswers: {},
+            submittedAnswers: {},
             quizOver: false,
             revealAnswers: false,
           });
@@ -137,6 +147,7 @@ export const useQuizStore = create<QuizState & QuizActions>()(
       partialize: (state) => ({
         currentQuestionIndex: state.currentQuestionIndex,
         selectedAnswers: state.selectedAnswers,
+        submittedAnswers: state.submittedAnswers,
         quizOver: state.quizOver,
       }),
     }
