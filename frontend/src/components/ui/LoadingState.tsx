@@ -1,17 +1,36 @@
-import React from 'react';
-import Loader from './Loader';
+import React, { useState, useEffect } from 'react';
 
 const LoadingState: React.FC = () => {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 95) return prev; // Cap at 95% until real completion
+        return prev + 5;
+      });
+    }, 300); // Update every 300ms
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="flex flex-col justify-center items-center h-screen space-y-4 -mt-16">
-      <Loader />
-      <div className="text-center space-y-2 max-w-md px-4">
-        <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
-          AI kami sedang berpikir keras!
-        </p>
-        <p className="text-slate-600 dark:text-slate-400">
-          Soal-soal keren akan segera hadir.
-        </p>
+      <div className="w-full max-w-md px-4 space-y-4">
+        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+          <div
+            className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
+            style={{ width: `${progress}%` }}
+          ></div>
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
+            AI kami sedang berpikir keras!
+          </p>
+          <p className="text-slate-600 dark:text-slate-400">
+            Soal-soal keren akan segera hadir.
+          </p>
+        </div>
       </div>
     </div>
   );

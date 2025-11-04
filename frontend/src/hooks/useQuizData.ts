@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { AssessmentData } from '../types';
+import { useQuizStore } from '../store/useQuizStore';
 
 const useQuizData = (tutorialId: string | null, userId: string | null) => {
   const [userPreferences, setUserPreferences] = useState<any>(null);
@@ -12,11 +13,20 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
   
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastFetchRef = useRef<number>(0);
+  
+  // Get quiz state to prevent refetch during quiz
+  const questions = useQuizStore(state => state.questions);
 
   // Fetch user preferences with cache busting
   const fetchPreferences = useCallback(async (forceRefresh = false) => {
     if (!userId) {
       setIsLoadingPreferences(false);
+      return;
+    }
+    
+    // CRITICAL: Don't refetch during quiz to prevent state reset
+    if (questions.length > 0) {
+      console.log('[LearnCheck] Skipping preference fetch - quiz in progress');
       return;
     }
 
@@ -58,7 +68,7 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     } finally {
       setIsLoadingPreferences(false);
     }
-  }, [userId, userPreferences]);
+  }, [userId, userPreferences, questions.length]);
 
   // Initial fetch on mount
   useEffect(() => {

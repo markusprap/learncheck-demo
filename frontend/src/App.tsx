@@ -307,7 +307,7 @@ const Quiz: React.FC<QuizProps> = ({ onTryAgain, onGoToIntro }) => {
           'text-red-600 dark:text-red-400 font-bold': isTimeCritical,
           'text-slate-600 dark:text-slate-400': !isTimeCritical,
         })}>
-          ⏱️ {formattedTime}
+          {formattedTime}
         </span>
       </div>
       <ProgressBar value={currentQuestionIndex + 1} max={questions.length} />
