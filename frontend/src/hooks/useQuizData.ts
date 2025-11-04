@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { AssessmentData } from '../types';
 
@@ -9,16 +9,28 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
   const [isLoadingPreferences, setIsLoadingPreferences] = useState<boolean>(true);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastFetchRef = useRef<number>(0);
 
   // Fetch user preferences with cache busting
-  const fetchPreferences = useCallback(async () => {
+  const fetchPreferences = useCallback(async (forceRefresh = false) => {
     if (!userId) {
       setIsLoadingPreferences(false);
       return;
     }
 
+    // Debounce: Prevent rapid-fire requests (wait 500ms between fetches)
+    const now = Date.now();
+    if (!forceRefresh && now - lastFetchRef.current < 500) {
+      console.log('[LearnCheck] Debouncing preference fetch...');
+      return;
+    }
+
+    lastFetchRef.current = now;
     setIsLoadingPreferences(true);
     setError(null);
+    
     try {
       // Add timestamp to prevent caching
       const response = await api.get('/preferences', {
@@ -27,28 +39,105 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
           _t: Date.now() // Cache buster
         },
       });
-      setUserPreferences(response.data.userPreferences);
+      
+      const newPrefs = response.data.userPreferences;
+      
+      // Check if preferences actually changed
+      const prefsChanged = JSON.stringify(userPreferences) !== JSON.stringify(newPrefs);
+      
+      if (prefsChanged) {
+        console.log('[LearnCheck] Preferences updated:', newPrefs);
+        setUserPreferences(newPrefs);
+      } else {
+        console.log('[LearnCheck] Preferences unchanged');
+      }
+      
     } catch (err: any) {
+      console.error('[LearnCheck] Failed to fetch preferences:', err);
       setError(err.response?.data?.message || err.message || 'Failed to load preferences');
     } finally {
       setIsLoadingPreferences(false);
     }
-  }, [userId]);
+  }, [userId, userPreferences]);
 
   // Initial fetch on mount
   useEffect(() => {
-    fetchPreferences();
-  }, [fetchPreferences]);
+    fetchPreferences(true);
+  }, [userId]); // Only depend on userId, not fetchPreferences
 
-  // Refetch preferences when window regains focus (user switched back from Dicoding settings)
+  // Listen for messages from parent window (Dicoding Classroom)
   useEffect(() => {
-    const handleFocus = () => {
-      console.log('[LearnCheck] Window focused, refetching preferences...');
-      fetchPreferences();
+    const handleMessage = (event: MessageEvent) => {
+      // Security: Verify origin if needed
+      // if (event.origin !== 'https://dicoding.com') return;
+      
+      if (event.data?.type === 'preference-updated') {
+        console.log('[LearnCheck] Received preference update from parent');
+        
+        // Clear existing timeout
+        if (fetchTimeoutRef.current) {
+          clearTimeout(fetchTimeoutRef.current);
+        }
+        
+        // Debounced refetch after 800ms (give backend time to save)
+        fetchTimeoutRef.current = setTimeout(() => {
+          fetchPreferences(true);
+        }, 800);
+      }
     };
 
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      if (fetchTimeoutRef.current) {
+        clearTimeout(fetchTimeoutRef.current);
+      }
+    };
+  }, [fetchPreferences]);
+
+  // Polling: Check for preference updates every 3 seconds when window is focused
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout | null = null;
+
+    const startPolling = () => {
+      console.log('[LearnCheck] Starting preference polling...');
+      pollInterval = setInterval(() => {
+        fetchPreferences();
+      }, 3000); // Poll every 3 seconds
+    };
+
+    const stopPolling = () => {
+      if (pollInterval) {
+        console.log('[LearnCheck] Stopping preference polling');
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    };
+
+    const handleFocus = () => {
+      console.log('[LearnCheck] Window focused');
+      fetchPreferences(true);
+      startPolling();
+    };
+
+    const handleBlur = () => {
+      console.log('[LearnCheck] Window blurred');
+      stopPolling();
+    };
+
+    // Start polling if window is already focused
+    if (document.hasFocus()) {
+      startPolling();
+    }
+
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+      stopPolling();
+    };
   }, [fetchPreferences]);
 
   // Generate quiz with AI (called when user clicks "Mulai Quiz")
@@ -79,7 +168,7 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     isGeneratingQuiz, 
     error, 
     generateQuiz,
-    refetchPreferences: fetchPreferences // Expose manual refetch
+    refetchPreferences: () => fetchPreferences(true) // Expose manual refetch
   };
 };
 
