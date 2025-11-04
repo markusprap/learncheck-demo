@@ -92,8 +92,11 @@ export const generateAssessmentQuestions = async (textContent: string) => {
         },
     });
     
-    // FIX: Access response text via .text property
+    // FIX: Access response text via .text property with null check
     const jsonText = response.text;
+    if (!jsonText) {
+      throw new Error("Empty response from Gemini API");
+    }
     return JSON.parse(jsonText);
   } catch (error) {
     console.error("Error generating assessment from Gemini:", error);
