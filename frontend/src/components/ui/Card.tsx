@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { twMerge } from 'tailwind-merge';
-import { clsx, ClassValue } from 'clsx';
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
 
