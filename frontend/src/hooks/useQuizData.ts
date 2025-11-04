@@ -10,30 +10,46 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch user preferences on mount (no AI generation yet)
-  useEffect(() => {
+  // Fetch user preferences with cache busting
+  const fetchPreferences = useCallback(async () => {
     if (!userId) {
       setIsLoadingPreferences(false);
       return;
     }
 
-    const fetchPreferences = async () => {
-      setIsLoadingPreferences(true);
-      setError(null);
-      try {
-        const response = await api.get('/preferences', {
-          params: { user_id: userId },
-        });
-        setUserPreferences(response.data.userPreferences);
-      } catch (err: any) {
-        setError(err.response?.data?.message || err.message || 'Failed to load preferences');
-      } finally {
-        setIsLoadingPreferences(false);
-      }
+    setIsLoadingPreferences(true);
+    setError(null);
+    try {
+      // Add timestamp to prevent caching
+      const response = await api.get('/preferences', {
+        params: { 
+          user_id: userId,
+          _t: Date.now() // Cache buster
+        },
+      });
+      setUserPreferences(response.data.userPreferences);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Failed to load preferences');
+    } finally {
+      setIsLoadingPreferences(false);
+    }
+  }, [userId]);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchPreferences();
+  }, [fetchPreferences]);
+
+  // Refetch preferences when window regains focus (user switched back from Dicoding settings)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('[LearnCheck] Window focused, refetching preferences...');
+      fetchPreferences();
     };
 
-    fetchPreferences();
-  }, [userId]);
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchPreferences]);
 
   // Generate quiz with AI (called when user clicks "Mulai Quiz")
   const generateQuiz = useCallback(async () => {
@@ -62,7 +78,8 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     isLoadingPreferences, 
     isGeneratingQuiz, 
     error, 
-    generateQuiz 
+    generateQuiz,
+    refetchPreferences: fetchPreferences // Expose manual refetch
   };
 };
 
