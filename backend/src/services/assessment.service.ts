@@ -4,9 +4,7 @@ import { generateAssessmentQuestions } from './gemini.service';
 import { parseHtmlContent } from '../utils/htmlParser';
 import { 
   getCachedQuizData, 
-  cacheQuizData, 
-  getCachedUserPreferences, 
-  cacheUserPreferences,
+  cacheQuizData,
   isRateLimited 
 } from './redis.service';
 
@@ -58,20 +56,9 @@ export const fetchAssessmentData = async (tutorialId: string, userId: string) =>
 };
 
 export const fetchUserPreferences = async (userId: string) => {
-  // Try cache first
-  const cached = await getCachedUserPreferences(userId);
-  if (cached) {
-    console.log(`[Cache] Using cached preferences for user ${userId}`);
-    return cached;
-  }
-
-  // Fetch from API
-  const preferences = await getUserPreferences(userId);
-  
-  // Cache for next time (fire and forget)
-  cacheUserPreferences(userId, preferences).catch(err =>
-    console.error('[Cache] Failed to cache preferences:', err)
-  );
-
-  return preferences;
+  // IMPORTANT: Don't cache user preferences!
+  // Preferences change frequently (real-time user interactions)
+  // and API call is fast (~200ms), so always fetch fresh data
+  console.log(`[Preferences] Fetching fresh preferences for user ${userId}`);
+  return await getUserPreferences(userId);
 };
