@@ -5,8 +5,27 @@ AI-Powered Quiz Generator for Dicoding Classroom
 LearnCheck! automatically generates personalized quiz questions based on tutorial content using Google Gemini AI, helping students test their understanding immediately after learning.
 
 [![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black)](https://learncheck-demo.vercel.app)
+[![Documentation](https://img.shields.io/badge/Documentation-Docusaurus-green)](https://docs-hvmwjl2ro-markuspraps-projects.vercel.app)
 [![Redis Cache](https://img.shields.io/badge/Redis-Cache-red)](https://upstash.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
+
+## 📚 Tutorial Lengkap
+
+Ingin membangun aplikasi ini dari nol? Ikuti tutorial step-by-step kami:
+
+**[🚀 Buka Dokumentasi Lengkap](https://docs-hvmwjl2ro-markuspraps-projects.vercel.app)**
+
+Tutorial meliputi:
+1. Setup Project dari 0
+2. Backend API dengan Express.js
+3. Integrasi Gemini AI
+4. Frontend dengan React & TypeScript
+5. State Management dengan Zustand
+6. Real-Time Preference Sync
+7. Redis Caching (12x faster!)
+8. Deploy ke Vercel
+
+Semua tutorial ditulis dalam **Bahasa Indonesia** dengan penjelasan yang mudah dipahami untuk pemula!
 
 ## Features
 
@@ -64,6 +83,8 @@ cd frontend
 npm install
 npm run dev  # Runs on http://localhost:5173
 ```
+
+**Butuh panduan lebih detail?** Lihat [Tutorial Lengkap](https://docs-hvmwjl2ro-markuspraps-projects.vercel.app) dengan penjelasan step-by-step!
 
 ## Environment Variables
 
@@ -175,6 +196,7 @@ Generate or fetch cached quiz for a tutorial.
 
 ## Documentation
 
+- **[📖 Tutorial Lengkap](https://docs-hvmwjl2ro-markuspraps-projects.vercel.app)** - Dokumentasi interaktif dengan Docusaurus
 - [EMBED.md](./EMBED.md) - Iframe embedding guide for Dicoding Classroom
 - [REDIS.md](./REDIS.md) - Redis setup and caching strategy
 
