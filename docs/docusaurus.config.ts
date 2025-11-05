@@ -86,7 +86,7 @@ const config: Config = {
           items: [
             {
               label: 'Mulai Tutorial',
-              to: '/intro',
+              to: '/docs/intro',
             },
           ],
         },
