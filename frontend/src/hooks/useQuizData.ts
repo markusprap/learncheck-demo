@@ -1,9 +1,15 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { AssessmentData } from '../types';
 import { useQuizStore } from '../store/useQuizStore';
+import { QUIZ_CONFIG, API_ENDPOINTS } from '../config/constants';
 
+/**
+ * Custom hook for fetching and managing quiz data with real-time preference updates
+ * @param tutorialId - Tutorial identifier
+ * @param userId - User identifier
+ * @returns Quiz data, preferences, loading states, and quiz generation function
+ */
 const useQuizData = (tutorialId: string | null, userId: string | null) => {
   const [userPreferences, setUserPreferences] = useState<any>(null);
   const [assessmentData, setAssessmentData] = useState<AssessmentData | null>(null);
@@ -30,9 +36,9 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       return;
     }
 
-    // Debounce: Prevent rapid-fire requests (wait 200ms between fetches)
+    // Debounce: Prevent rapid-fire requests
     const now = Date.now();
-    if (!forceRefresh && now - lastFetchRef.current < 200) {
+    if (!forceRefresh && now - lastFetchRef.current < QUIZ_CONFIG.DEBOUNCE_MS) {
       console.log('[LearnCheck] Debouncing preference fetch...');
       return;
     }
@@ -43,7 +49,7 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     
     try {
       // Add timestamp to prevent caching
-      const response = await api.get('/preferences', {
+      const response = await api.get(API_ENDPOINTS.PREFERENCES, {
         params: { 
           user_id: userId,
           _t: Date.now() // Cache buster
@@ -89,10 +95,10 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
           clearTimeout(fetchTimeoutRef.current);
         }
         
-        // Immediate refetch (give backend 300ms to save)
+        // Immediate refetch (give backend time to save)
         fetchTimeoutRef.current = setTimeout(() => {
           fetchPreferences(true);
-        }, 300);
+        }, QUIZ_CONFIG.POSTMESSAGE_DELAY_MS);
       }
     };
 
@@ -113,7 +119,7 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       console.log('[LearnCheck] Starting preference polling...');
       pollInterval = setInterval(() => {
         fetchPreferences();
-      }, 500); // Poll every 500ms for near real-time updates
+      }, QUIZ_CONFIG.POLLING_INTERVAL_MS); // Near real-time updates
     };
 
     const stopPolling = () => {
@@ -150,7 +156,9 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     };
   }, [fetchPreferences]);
 
-  // Generate quiz with AI (called when user clicks "Mulai Quiz")
+  /**
+   * Generate quiz with AI (called when user clicks "Mulai Quiz")
+   */
   const generateQuiz = useCallback(async () => {
     if (!tutorialId || !userId) {
       setError('Missing tutorial_id or user_id');
@@ -159,13 +167,16 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
 
     setIsGeneratingQuiz(true);
     setError(null);
+    
     try {
-      const response = await api.get('/assessment', {
+      const response = await api.get(API_ENDPOINTS.ASSESSMENT, {
         params: { tutorial_id: tutorialId, user_id: userId },
       });
       setAssessmentData(response.data);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Failed to generate quiz');
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to generate quiz';
+      console.error('[LearnCheck] Quiz generation error:', errorMessage);
+      setError(errorMessage);
     } finally {
       setIsGeneratingQuiz(false);
     }

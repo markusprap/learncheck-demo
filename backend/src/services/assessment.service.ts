@@ -1,26 +1,31 @@
-
 import { getTutorialContent, getUserPreferences } from './dicoding.service';
 import { generateAssessmentQuestions } from './gemini.service';
 import { parseHtmlContent } from '../utils/htmlParser';
-import { 
-  getCachedQuizData, 
-  cacheQuizData,
-  isRateLimited 
-} from './redis.service';
+import { getCachedQuizData, cacheQuizData, isRateLimited } from './redis.service';
+import { ERROR_MESSAGES } from '../config/constants';
+import type { AssessmentResponse, UserPreferences } from '../types';
 
-export const fetchAssessmentData = async (tutorialId: string, userId: string) => {
-  // Check rate limit (max 5 quiz generations per minute per user)
-  const rateLimited = await isRateLimited(userId, 5, 60);
+/**
+ * Fetch or generate assessment data for a tutorial
+ * @param tutorialId - Tutorial identifier
+ * @param userId - User identifier  
+ * @returns Assessment with user preferences and cache status
+ * @throws Error if rate limit exceeded or generation fails
+ */
+export const fetchAssessmentData = async (
+  tutorialId: string,
+  userId: string
+): Promise<AssessmentResponse> => {
+  // Check rate limit
+  const rateLimited = await isRateLimited(userId);
   if (rateLimited) {
-    throw new Error('Rate limit exceeded. Please wait a moment before generating another quiz.');
+    throw new Error(ERROR_MESSAGES.RATE_LIMIT_EXCEEDED);
   }
 
-  // Try to get cached quiz data first
+  // Try cache first
   const cachedQuiz = await getCachedQuizData(tutorialId);
   if (cachedQuiz) {
     console.log(`[Cache] Using cached quiz for tutorial ${tutorialId}`);
-    
-    // Still fetch fresh user preferences (they change more often)
     const userPreferences = await getUserPreferences(userId);
     
     return {
@@ -30,20 +35,18 @@ export const fetchAssessmentData = async (tutorialId: string, userId: string) =>
     };
   }
 
-  // Fetch in parallel
+  // Generate fresh quiz
   const [tutorialHtml, userPreferences] = await Promise.all([
     getTutorialContent(tutorialId),
     getUserPreferences(userId),
   ]);
 
-  // Parse HTML to get clean text
   const textContent = parseHtmlContent(tutorialHtml);
   
-  // Generate questions using Gemini API
   console.log(`[Gemini] Generating fresh quiz for tutorial ${tutorialId}`);
   const assessment = await generateAssessmentQuestions(textContent);
 
-  // Cache the generated quiz (fire and forget)
+  // Cache for next time (fire and forget)
   cacheQuizData(tutorialId, assessment).catch(err => 
     console.error('[Cache] Failed to cache quiz data:', err)
   );
@@ -55,10 +58,12 @@ export const fetchAssessmentData = async (tutorialId: string, userId: string) =>
   };
 };
 
-export const fetchUserPreferences = async (userId: string) => {
-  // IMPORTANT: Don't cache user preferences!
-  // Preferences change frequently (real-time user interactions)
-  // and API call is fast (~200ms), so always fetch fresh data
+/**
+ * Fetch fresh user preferences (not cached for real-time updates)
+ * @param userId - User identifier
+ * @returns User preferences object
+ */
+export const fetchUserPreferences = async (userId: string): Promise<UserPreferences> => {
   console.log(`[Preferences] Fetching fresh preferences for user ${userId}`);
   return await getUserPreferences(userId);
 };

@@ -1,4 +1,6 @@
 import Redis from 'ioredis';
+import { REDIS_CONFIG, CACHE_KEYS, ERROR_MESSAGES } from '../config/constants';
+import type { Assessment } from '../types';
 
 let redis: Redis | null = null;
 
@@ -20,26 +22,23 @@ export const getRedisClient = (): Redis | null => {
 
   try {
     redis = new Redis(process.env.REDIS_URL, {
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: REDIS_CONFIG.MAX_RETRIES,
       retryStrategy(times) {
         const delay = Math.min(times * 50, 2000);
         return delay;
       },
-      // Vercel serverless timeout is 10s, so set shorter timeout
-      connectTimeout: 5000,
+      connectTimeout: REDIS_CONFIG.CONNECT_TIMEOUT,
       lazyConnect: false, // Connect immediately for serverless
     });
 
     redis.on('error', (err) => {
       console.error('[Redis] Connection error:', err.message);
-      // Reset redis on error so next call will create new connection
       redis = null;
     });
 
     redis.on('connect', () => {
       console.log('[Redis] Connected successfully');
     });
-
 
     return redis;
   } catch (error) {
@@ -50,24 +49,25 @@ export const getRedisClient = (): Redis | null => {
 
 /**
  * Cache Gemini API response for a tutorial
- * TTL: 24 hours (tutorial content rarely changes)
+ * @param tutorialId - Tutorial identifier
+ * @param quizData - Assessment data to cache
+ * @returns True if caching succeeded, false otherwise
  */
 export const cacheQuizData = async (
   tutorialId: string,
-  quizData: any
+  quizData: Assessment
 ): Promise<boolean> => {
   const client = getRedisClient();
   if (!client) return false;
 
   try {
-    const key = `learncheck:quiz:tutorial:${tutorialId}`;
+    const key = CACHE_KEYS.QUIZ(tutorialId);
     const value = JSON.stringify({
       ...quizData,
       cachedAt: new Date().toISOString(),
     });
     
-    // Cache for 24 hours
-    await client.setex(key, 86400, value);
+    await client.setex(key, REDIS_CONFIG.QUIZ_CACHE_TTL, value);
     console.log(`[Redis] Cached quiz data for tutorial ${tutorialId}`);
     return true;
   } catch (error) {
@@ -78,16 +78,17 @@ export const cacheQuizData = async (
 
 /**
  * Get cached quiz data for a tutorial
- * Returns null if not found or Redis unavailable
+ * @param tutorialId - Tutorial identifier
+ * @returns Cached assessment or null if not found
  */
 export const getCachedQuizData = async (
   tutorialId: string
-): Promise<any | null> => {
+): Promise<Assessment | null> => {
   const client = getRedisClient();
   if (!client) return null;
 
   try {
-    const key = `learncheck:quiz:tutorial:${tutorialId}`;
+    const key = CACHE_KEYS.QUIZ(tutorialId);
     const cached = await client.get(key);
     
     if (!cached) {
@@ -96,7 +97,7 @@ export const getCachedQuizData = async (
     }
 
     console.log(`[Redis] Cache hit for tutorial ${tutorialId}`);
-    return JSON.parse(cached);
+    return JSON.parse(cached) as Assessment;
   } catch (error) {
     console.error('[Redis] Failed to get cached quiz data:', error);
     return null;
@@ -159,30 +160,27 @@ export const getCachedUserPreferences = async (
 };
 
 /**
- * Rate limiting: Check if user exceeded request limit
- * Returns true if rate limit exceeded, false otherwise
+ * Check if user has exceeded rate limit for quiz generation
+ * @param userId - User identifier
+ * @returns True if rate limit exceeded, false otherwise
  */
-export const isRateLimited = async (
-  userId: string,
-  maxRequests: number = 5,
-  windowSeconds: number = 60
-): Promise<boolean> => {
+export const isRateLimited = async (userId: string): Promise<boolean> => {
   const client = getRedisClient();
   if (!client) return false; // No rate limiting if Redis unavailable
 
   try {
-    const key = `learncheck:ratelimit:${userId}`;
-    
-    // Increment counter
+    const key = CACHE_KEYS.RATE_LIMIT(userId);
     const count = await client.incr(key);
     
     // Set expiry on first request
     if (count === 1) {
-      await client.expire(key, windowSeconds);
+      await client.expire(key, REDIS_CONFIG.RATE_LIMIT_WINDOW);
     }
     
-    if (count > maxRequests) {
-      console.warn(`[Redis] Rate limit exceeded for user ${userId}: ${count}/${maxRequests}`);
+    if (count > REDIS_CONFIG.RATE_LIMIT_MAX_REQUESTS) {
+      console.warn(
+        `[Redis] Rate limit exceeded for user ${userId}: ${count}/${REDIS_CONFIG.RATE_LIMIT_MAX_REQUESTS}`
+      );
       return true;
     }
     

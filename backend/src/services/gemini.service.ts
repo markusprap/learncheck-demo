@@ -1,13 +1,8 @@
-// FIX: Use GoogleGenAI from @google/genai and import Type for schema
 import { GoogleGenAI, Type } from '@google/genai';
-import dotenv from 'dotenv';
+import { API_CONFIG, ERROR_MESSAGES } from '../config/constants';
+import type { Assessment } from '../types';
 
-dotenv.config();
-
-// FIX: Use GoogleGenAI from @google/genai with the correct initialization object
-const ai = new GoogleGenAI({apiKey: process.env.GEMINI_API_KEY!});
-
-// FIX: Use Type enum for schema definition
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 const assessmentSchema = {
     type: Type.OBJECT,
     properties: {
@@ -60,7 +55,13 @@ const assessmentSchema = {
 };
 
 
-export const generateAssessmentQuestions = async (textContent: string) => {
+/**
+ * Generate assessment questions using Gemini AI
+ * @param textContent - Clean text content from tutorial
+ * @returns Assessment object with generated questions
+ * @throws Error if generation fails or response is empty
+ */
+export const generateAssessmentQuestions = async (textContent: string): Promise<Assessment> => {
   const prompt = `
     Berdasarkan konten berikut, buatkan 3 pertanyaan pilihan ganda dalam Bahasa Indonesia untuk menguji pemahaman.
     Setiap pertanyaan harus memiliki 4 pilihan jawaban.
@@ -82,24 +83,23 @@ export const generateAssessmentQuestions = async (textContent: string) => {
   `;
 
   try {
-    // FIX: Use ai.models.generateContent instead of getGenerativeModel
     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: assessmentSchema,
-        },
+      model: API_CONFIG.GEMINI_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: assessmentSchema,
+      },
     });
     
-    // FIX: Access response text via .text property with null check
     const jsonText = response.text;
     if (!jsonText) {
-      throw new Error("Empty response from Gemini API");
+      throw new Error(ERROR_MESSAGES.EMPTY_GEMINI_RESPONSE);
     }
-    return JSON.parse(jsonText);
+    
+    return JSON.parse(jsonText) as Assessment;
   } catch (error) {
-    console.error("Error generating assessment from Gemini:", error);
-    throw new Error("Failed to generate assessment questions.");
+    console.error("[Gemini] Error generating assessment:", error);
+    throw new Error(ERROR_MESSAGES.GEMINI_GENERATION_FAILED);
   }
 };
