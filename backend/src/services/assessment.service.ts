@@ -8,13 +8,15 @@ import type { AssessmentResponse, UserPreferences } from '../types';
 /**
  * Fetch or generate assessment data for a tutorial
  * @param tutorialId - Tutorial identifier
- * @param userId - User identifier  
+ * @param userId - User identifier
+ * @param skipCache - If true, bypass cache and generate fresh quiz
  * @returns Assessment with user preferences and cache status
  * @throws Error if rate limit exceeded or generation fails
  */
 export const fetchAssessmentData = async (
   tutorialId: string,
-  userId: string
+  userId: string,
+  skipCache: boolean = false
 ): Promise<AssessmentResponse> => {
   // Check rate limit
   const rateLimited = await isRateLimited(userId);
@@ -22,17 +24,21 @@ export const fetchAssessmentData = async (
     throw new Error(ERROR_MESSAGES.RATE_LIMIT_EXCEEDED);
   }
 
-  // Try cache first
-  const cachedQuiz = await getCachedQuizData(tutorialId);
-  if (cachedQuiz) {
-    console.log(`[Cache] Using cached quiz for tutorial ${tutorialId}`);
-    const userPreferences = await getUserPreferences(userId);
-    
-    return {
-      assessment: cachedQuiz,
-      userPreferences,
-      fromCache: true,
-    };
+  // Try cache first (unless skipCache is true for retries)
+  if (!skipCache) {
+    const cachedQuiz = await getCachedQuizData(tutorialId);
+    if (cachedQuiz) {
+      console.log(`[Cache] Using cached quiz for tutorial ${tutorialId}`);
+      const userPreferences = await getUserPreferences(userId);
+      
+      return {
+        assessment: cachedQuiz,
+        userPreferences,
+        fromCache: true,
+      };
+    }
+  } else {
+    console.log(`[Cache] Skipping cache for fresh quiz (retry attempt)`);
   }
 
   // Generate fresh quiz
@@ -46,10 +52,12 @@ export const fetchAssessmentData = async (
   console.log(`[Gemini] Generating fresh quiz for tutorial ${tutorialId}`);
   const assessment = await generateAssessmentQuestions(textContent);
 
-  // Cache for next time (fire and forget)
-  cacheQuizData(tutorialId, assessment).catch(err => 
-    console.error('[Cache] Failed to cache quiz data:', err)
-  );
+  // Cache for next time (fire and forget) - only if not a retry
+  if (!skipCache) {
+    cacheQuizData(tutorialId, assessment).catch(err => 
+      console.error('[Cache] Failed to cache quiz data:', err)
+    );
+  }
 
   return {
     assessment,

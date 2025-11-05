@@ -358,13 +358,16 @@ const App: React.FC = () => {
 
   const handleStartQuiz = async () => {
     setQuizStarted(true);
-    await generateQuiz(); // Trigger AI generation when user clicks "Mulai"
+    await generateQuiz(); // First attempt: use cache if available
   };
 
-  const handleTryAgain = () => {
+  const handleTryAgain = async () => {
     reset();
     setQuizStarted(false);
-    setTimeout(() => handleStartQuiz(), 100);
+    // Small delay for UI transition
+    await new Promise(resolve => setTimeout(resolve, 100));
+    setQuizStarted(true);
+    await generateQuiz(true); // Retry: skip cache, generate fresh questions
   };
   
   const handleGoToIntro = () => {

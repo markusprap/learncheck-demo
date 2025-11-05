@@ -29,10 +29,11 @@ export const getUserPrefs = async (req: Request, res: Response, next: NextFuncti
  * @route GET /api/v1/assessment
  * @query tutorial_id - Tutorial identifier
  * @query user_id - User identifier
+ * @query fresh - Optional: 'true' to skip cache and generate new questions (for retries)
  */
 export const getAssessment = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { tutorial_id, user_id } = req.query;
+    const { tutorial_id, user_id, fresh } = req.query;
 
     if (!tutorial_id || typeof tutorial_id !== 'string') {
       return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
@@ -46,7 +47,10 @@ export const getAssessment = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    const assessmentData = await fetchAssessmentData(tutorial_id, user_id);
+    // Parse 'fresh' parameter (for retry attempts to get new questions)
+    const skipCache = fresh === 'true';
+    
+    const assessmentData = await fetchAssessmentData(tutorial_id, user_id, skipCache);
     res.status(HTTP_STATUS.OK).json(assessmentData);
   } catch (error) {
     next(error);

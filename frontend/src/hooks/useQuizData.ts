@@ -157,9 +157,10 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
   }, [fetchPreferences]);
 
   /**
-   * Generate quiz with AI (called when user clicks "Mulai Quiz")
+   * Generate quiz with AI
+   * @param isRetry - If true, skip cache and generate fresh questions
    */
-  const generateQuiz = useCallback(async () => {
+  const generateQuiz = useCallback(async (isRetry: boolean = false) => {
     if (!tutorialId || !userId) {
       setError('Missing tutorial_id or user_id');
       return;
@@ -170,7 +171,11 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     
     try {
       const response = await api.get(API_ENDPOINTS.ASSESSMENT, {
-        params: { tutorial_id: tutorialId, user_id: userId },
+        params: { 
+          tutorial_id: tutorialId, 
+          user_id: userId,
+          ...(isRetry && { fresh: 'true' }) // Add fresh=true for retry attempts
+        },
       });
       setAssessmentData(response.data);
     } catch (err: any) {
