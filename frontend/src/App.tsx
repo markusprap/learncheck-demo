@@ -14,7 +14,7 @@ const ProgressBar: React.FC<{ value: number; max: number }> = ({ value, max }) =
     return (
       <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden" role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max}>
         <div
-          className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
+          className="bg-primary dark:bg-primary-400 h-2 rounded-full transition-all duration-500 ease-out"
           style={{ width: `${percentage}%` }}
         ></div>
       </div>
@@ -151,7 +151,7 @@ const QuestionComponent: React.FC<QuestionProps> = ({ question }) => {
 
     if (!isSubmitted) {
         classes += ' border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800';
-        if (isSelected) classes += ' bg-blue-100 dark:bg-blue-900/50 border-blue-500 ring-2 ring-blue-400 dark:ring-blue-600';
+        if (isSelected) classes += ' bg-primary-50 dark:bg-primary-900/50 border-primary-500 ring-2 ring-primary-400 dark:ring-primary-600';
     } else {
         const isCorrectOption = option.id === question.correctOptionId;
         if (isCorrectOption) {
@@ -234,11 +234,11 @@ const QuestionComponent: React.FC<QuestionProps> = ({ question }) => {
            <h4 className="font-bold text-base mb-2">Penjelasan</h4>
            <p className="text-sm text-slate-700 dark:text-slate-300">{fullExplanation}</p>
            {hintText && (
-             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/40 rounded-lg flex items-start">
-                <Lightbulb className="h-5 w-5 text-blue-500 dark:text-blue-400 mr-3 mt-0.5 flex-shrink-0" />
+             <div className="mt-4 p-3 bg-primary-50 dark:bg-primary-900/40 rounded-lg flex items-start">
+                <Lightbulb className="h-5 w-5 text-primary-500 dark:text-primary-400 mr-3 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h5 className="font-semibold text-sm text-blue-800 dark:text-blue-200">Hint</h5>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">{hintText}</p>
+                  <h5 className="font-semibold text-sm text-primary-800 dark:text-primary-200">Hint</h5>
+                  <p className="text-sm text-primary-700 dark:text-primary-300">{hintText}</p>
                 </div>
              </div>
            )}
@@ -330,7 +330,12 @@ const Intro: React.FC<IntroProps> = ({ onStart, isLoading = false }) => (
             </p>
             <div className="flex justify-center">
                 <Button onClick={onStart} size="lg" disabled={isLoading}>
-                    {isLoading ? 'Memuat...' : 'Mulai Cek Pemahaman!'}
+                    {isLoading ? (
+                        <div className="flex items-center gap-2">
+                            <Loader />
+                            <span>Memuat...</span>
+                        </div>
+                    ) : 'Mulai Cek Pemahaman!'}
                 </Button>
             </div>
         </Card>
@@ -357,6 +362,7 @@ const App: React.FC = () => {
   const reset = useQuizStore(state => state.reset);
 
   const handleStartQuiz = async () => {
+    if (isGeneratingQuiz) return; // Prevent multiple clicks
     setQuizStarted(true);
     await generateQuiz(); // First attempt: use cache if available
   };
@@ -417,7 +423,7 @@ const App: React.FC = () => {
     }
 
     if (!quizStarted) {
-        return <Intro onStart={handleStartQuiz} isLoading={isLoadingPreferences} />;
+        return <Intro onStart={handleStartQuiz} isLoading={isLoadingPreferences || isGeneratingQuiz} />;
     }
     if (isGeneratingQuiz) {
       return <LoadingState />;

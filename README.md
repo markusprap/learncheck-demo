@@ -1,6 +1,6 @@
-# LearnCheck! 🎓
+# LearnCheck!
 
-**AI-Powered Quiz Generator for Dicoding Classroom**
+AI-Powered Quiz Generator for Dicoding Classroom
 
 LearnCheck! automatically generates personalized quiz questions based on tutorial content using Google Gemini AI, helping students test their understanding immediately after learning.
 
@@ -8,21 +8,17 @@ LearnCheck! automatically generates personalized quiz questions based on tutoria
 [![Redis Cache](https://img.shields.io/badge/Redis-Cache-red)](https://upstash.com)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)](https://www.typescriptlang.org/)
 
----
+## Features
 
-## ✨ Features
+- AI-Generated Questions: 3 multiple-choice questions per tutorial using Gemini 2.5 Flash
+- Redis Caching: 12x faster loading with Upstash Redis (16s → 1.3s)
+- Real-Time Preferences: Theme, font size, font style sync instantly (500ms latency)
+- Progress Tracking: LocalStorage-based quiz state with per-user/per-tutorial isolation
+- Rate Limiting: 5 quiz generations per minute per user
+- Responsive Design: Optimized for both desktop and mobile
+- Dark Mode Support: Follows user preference from Dicoding
 
-- 🤖 **AI-Generated Questions**: 3 multiple-choice questions per tutorial using Gemini 2.5 Flash
-- ⚡ **Redis Caching**: 12x faster loading with Upstash Redis (16s → 1.3s)
-- 🎨 **Real-Time Preferences**: Theme, font size, font style sync instantly (500ms latency)
-- 📊 **Progress Tracking**: LocalStorage-based quiz state with per-user/per-tutorial isolation
-- 🔒 **Rate Limiting**: 5 quiz generations per minute per user
-- 📱 **Responsive Design**: Optimized for both desktop and mobile
-- 🌙 **Dark Mode Support**: Follows user preference from Dicoding
-
----
-
-## 🏗️ Architecture
+## Architecture
 
 ```
 learncheck-demo/
@@ -44,9 +40,7 @@ learncheck-demo/
 └── vercel.json          # Monorepo deployment config
 ```
 
----
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Node.js 18+ 
@@ -71,9 +65,7 @@ npm install
 npm run dev  # Runs on http://localhost:5173
 ```
 
----
-
-## 🔧 Environment Variables
+## Environment Variables
 
 ### Backend (.env)
 ```env
@@ -84,9 +76,7 @@ REDIS_URL=rediss://default:token@endpoint.upstash.io:6379  # Optional
 ### Frontend
 No environment variables needed for local development.
 
----
-
-## 📦 Deployment
+## Deployment
 
 ### Vercel (Recommended)
 
@@ -103,9 +93,7 @@ No environment variables needed for local development.
 
 The `vercel.json` config handles the monorepo setup automatically.
 
----
-
-## 🎯 API Endpoints
+## API Endpoints
 
 ### `GET /api/v1/preferences`
 Fetch user preferences from Dicoding.
@@ -140,9 +128,7 @@ Generate or fetch cached quiz for a tutorial.
 }
 ```
 
----
-
-## 🗄️ Redis Caching Strategy
+## Redis Caching Strategy
 
 | Cache Type | TTL | Key Pattern | Purpose |
 |------------|-----|-------------|---------|
@@ -151,9 +137,7 @@ Generate or fetch cached quiz for a tutorial.
 
 **Note**: User preferences are NOT cached to ensure real-time updates.
 
----
-
-## 🧪 Performance Metrics
+## Performance Metrics
 
 ### Without Redis
 - Quiz Generation: **16 seconds**
@@ -165,9 +149,7 @@ Generate or fetch cached quiz for a tutorial.
 - Cache Miss: 16 seconds
 - Monthly Cost: **$24** (80% savings!)
 
----
-
-## 🎨 Tech Stack
+## Tech Stack
 
 ### Frontend
 - **React 18** - UI library
@@ -191,16 +173,12 @@ Generate or fetch cached quiz for a tutorial.
 - **Upstash Redis** - Managed Redis
 - **Dicoding API** - Content source
 
----
+## Documentation
 
-## 📖 Documentation
+- [EMBED.md](./EMBED.md) - Iframe embedding guide for Dicoding Classroom
+- [REDIS.md](./REDIS.md) - Redis setup and caching strategy
 
-- [**EMBED.md**](./EMBED.md) - Iframe embedding guide for Dicoding Classroom
-- [**REDIS.md**](./REDIS.md) - Redis setup and caching strategy
-
----
-
-## 🤝 Contributing
+## Contributing
 
 This is a demo project for Dicoding Classroom integration. For production use:
 
@@ -210,21 +188,13 @@ This is a demo project for Dicoding Classroom integration. For production use:
 4. Set up error tracking (Sentry)
 5. Add E2E tests
 
----
-
-## 📄 License
+## License
 
 MIT License - feel free to use this project as a reference!
 
----
+## Acknowledgments
 
-## 🙏 Acknowledgments
-
-- **Dicoding Indonesia** - For the learning platform
-- **Google Gemini** - For AI capabilities
-- **Upstash** - For managed Redis
-
----
-
-Built with ❤️ for better learning experiences
+- Dicoding Indonesia - For the learning platform
+- Google Gemini - For AI capabilities
+- Upstash - For managed Redis
 

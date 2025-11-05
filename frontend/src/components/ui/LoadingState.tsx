@@ -19,7 +19,7 @@ const LoadingState: React.FC = () => {
       <div className="w-full max-w-md px-4 space-y-4">
         <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
           <div
-            className="bg-blue-600 dark:bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
+            className="bg-primary dark:bg-primary-400 h-2 rounded-full transition-all duration-300 ease-out"
             style={{ width: `${progress}%` }}
           ></div>
         </div>
