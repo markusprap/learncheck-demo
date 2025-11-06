@@ -348,6 +348,8 @@ const App: React.FC = () => {
   const userId = urlParams.get('user_id') || urlParams.get('user');
   
   const [quizStarted, setQuizStarted] = useState(false);
+  const [isStarting, setIsStarting] = useState(false); // New state to prevent double-click
+  
   const { 
     userPreferences, 
     assessmentData, 
@@ -362,14 +364,17 @@ const App: React.FC = () => {
   const reset = useQuizStore(state => state.reset);
 
   const handleStartQuiz = async () => {
-    if (isGeneratingQuiz) return; // Prevent multiple clicks
+    if (isGeneratingQuiz || isStarting) return; // Prevent multiple clicks
+    setIsStarting(true);
     setQuizStarted(true);
     await generateQuiz(); // First attempt: use cache if available
+    setIsStarting(false);
   };
 
   const handleTryAgain = async () => {
     reset();
     setQuizStarted(false);
+    setIsStarting(false);
     // Small delay for UI transition
     await new Promise(resolve => setTimeout(resolve, 100));
     setQuizStarted(true);
@@ -378,6 +383,7 @@ const App: React.FC = () => {
   
   const handleGoToIntro = () => {
     setQuizStarted(false);
+    setIsStarting(false);
     reset();
   };
 
@@ -423,9 +429,9 @@ const App: React.FC = () => {
     }
 
     if (!quizStarted) {
-        return <Intro onStart={handleStartQuiz} isLoading={isLoadingPreferences || isGeneratingQuiz} />;
+        return <Intro onStart={handleStartQuiz} isLoading={isLoadingPreferences || isGeneratingQuiz || isStarting} />;
     }
-    if (isGeneratingQuiz) {
+    if (isGeneratingQuiz || isStarting) {
       return <LoadingState />;
     }
     if (error && !assessmentData?.assessment) {

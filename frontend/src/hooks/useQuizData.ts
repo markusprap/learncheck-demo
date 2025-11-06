@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { AssessmentData } from '../types';
-import { QUIZ_CONFIG, API_ENDPOINTS } from '../config/constants';
+import { API_ENDPOINTS } from '../config/constants';
 
 /**
  * Custom hook for fetching and managing quiz data with real-time preference updates
@@ -26,10 +26,9 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       return;
     }
 
-    // Debounce: Prevent rapid-fire requests
+    // Debounce: Prevent rapid-fire requests (reduced to 100ms for faster sync)
     const now = Date.now();
-    if (!forceRefresh && now - lastFetchRef.current < QUIZ_CONFIG.DEBOUNCE_MS) {
-      console.log('[LearnCheck] Debouncing preference fetch...');
+    if (!forceRefresh && now - lastFetchRef.current < 100) {
       return;
     }
 
@@ -48,15 +47,9 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       
       const newPrefs = response.data.userPreferences;
       
-      // Check if preferences actually changed
-      const prefsChanged = JSON.stringify(userPreferences) !== JSON.stringify(newPrefs);
-      
-      if (prefsChanged) {
-        console.log('[LearnCheck] Preferences updated:', newPrefs);
-        setUserPreferences(newPrefs);
-      } else {
-        console.log('[LearnCheck] Preferences unchanged');
-      }
+      // Always update preferences (no need to check if changed)
+      console.log('[LearnCheck] Preferences fetched:', newPrefs);
+      setUserPreferences(newPrefs);
       
     } catch (err: any) {
       console.error('[LearnCheck] Failed to fetch preferences:', err);
@@ -64,7 +57,7 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     } finally {
       setIsLoadingPreferences(false);
     }
-  }, [userId, userPreferences]);
+  }, [userId]);
 
   // Initial fetch on mount
   useEffect(() => {
@@ -85,10 +78,10 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
           clearTimeout(fetchTimeoutRef.current);
         }
         
-        // Immediate refetch (give backend time to save)
+        // Immediate refetch (reduced delay from 300ms to 100ms)
         fetchTimeoutRef.current = setTimeout(() => {
           fetchPreferences(true);
-        }, QUIZ_CONFIG.POSTMESSAGE_DELAY_MS);
+        }, 100);
       }
     };
 
@@ -101,7 +94,7 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     };
   }, [fetchPreferences]);
 
-  // Polling: Check for preference updates every 3 seconds when window is focused
+  // Polling: Check for preference updates every 500ms when window is focused
   useEffect(() => {
     let pollInterval: NodeJS.Timeout | null = null;
 
@@ -109,7 +102,7 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       console.log('[LearnCheck] Starting preference polling...');
       pollInterval = setInterval(() => {
         fetchPreferences();
-      }, QUIZ_CONFIG.POLLING_INTERVAL_MS); // Near real-time updates
+      }, 500); // Faster polling for real-time feel (was 3000ms)
     };
 
     const stopPolling = () => {
@@ -131,10 +124,8 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       stopPolling();
     };
 
-    // Start polling if window is already focused
-    if (document.hasFocus()) {
-      startPolling();
-    }
+    // Start polling immediately
+    startPolling();
 
     window.addEventListener('focus', handleFocus);
     window.addEventListener('blur', handleBlur);

@@ -6,10 +6,13 @@ const LoadingState: React.FC = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 95) return prev; // Cap at 95% until real completion
-        return prev + 5;
+        if (prev >= 90) {
+          // Slow down near the end
+          return Math.min(prev + 1, 95);
+        }
+        return prev + 8; // Faster initial progress
       });
-    }, 300); // Update every 300ms
+    }, 200); // Update every 200ms for smoother animation
 
     return () => clearInterval(interval);
   }, []);
