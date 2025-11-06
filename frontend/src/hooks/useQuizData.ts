@@ -6,6 +6,28 @@ import { QUIZ_CONFIG, API_ENDPOINTS } from '../config/constants';
 
 /**
  * Custom hook for fetching and managing quiz data with real-time preference updates
+ * 
+ * BEST PRACTICES for User Preferences:
+ * 
+ * 1. **Non-Blocking Updates During Quiz**
+ *    - Preferences should update silently without interrupting quiz flow
+ *    - Use `silentUpdate` flag to prevent loading states during active quiz
+ * 
+ * 2. **Event-Driven Architecture**
+ *    - Listen to postMessage from parent window (Dicoding Classroom)
+ *    - React to focus events for cross-tab sync
+ *    - Avoid continuous polling (performance + UX impact)
+ * 
+ * 3. **State Isolation**
+ *    - Quiz progress stored separately from preferences
+ *    - Preference changes don't reset quiz state
+ *    - localStorage keys scoped per user+tutorial
+ * 
+ * 4. **Graceful Degradation**
+ *    - Silent failures during quiz (don't show errors)
+ *    - Debouncing prevents rapid-fire requests
+ *    - Cache busting ensures fresh data when needed
+ * 
  * @param tutorialId - Tutorial identifier
  * @param userId - User identifier
  * @returns Quiz data, preferences, loading states, and quiz generation function
@@ -24,14 +46,14 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
   const questions = useQuizStore(state => state.questions);
 
   // Fetch user preferences with cache busting
-  const fetchPreferences = useCallback(async (forceRefresh = false) => {
+  const fetchPreferences = useCallback(async (forceRefresh = false, silentUpdate = false) => {
     if (!userId) {
       setIsLoadingPreferences(false);
       return;
     }
     
-    // CRITICAL: Don't refetch during quiz to prevent state reset
-    if (questions.length > 0) {
+    // CRITICAL: During quiz, only update preferences silently (no loading state)
+    if (questions.length > 0 && !silentUpdate) {
       console.log('[LearnCheck] Skipping preference fetch - quiz in progress');
       return;
     }
@@ -44,7 +66,11 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     }
 
     lastFetchRef.current = now;
-    setIsLoadingPreferences(true);
+    
+    // Only show loading state if not during quiz
+    if (!silentUpdate) {
+      setIsLoadingPreferences(true);
+    }
     setError(null);
     
     try {
@@ -58,23 +84,22 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
       
       const newPrefs = response.data.userPreferences;
       
-      // Check if preferences actually changed
-      const prefsChanged = JSON.stringify(userPreferences) !== JSON.stringify(newPrefs);
-      
-      if (prefsChanged) {
-        console.log('[LearnCheck] Preferences updated:', newPrefs);
-        setUserPreferences(newPrefs);
-      } else {
-        console.log('[LearnCheck] Preferences unchanged');
-      }
+      // Always update preferences (even during quiz)
+      console.log('[LearnCheck] Preferences updated:', newPrefs);
+      setUserPreferences(newPrefs);
       
     } catch (err: any) {
       console.error('[LearnCheck] Failed to fetch preferences:', err);
-      setError(err.response?.data?.message || err.message || 'Failed to load preferences');
+      // Don't set error during quiz (silent fail)
+      if (!silentUpdate) {
+        setError(err.response?.data?.message || err.message || 'Failed to load preferences');
+      }
     } finally {
-      setIsLoadingPreferences(false);
+      if (!silentUpdate) {
+        setIsLoadingPreferences(false);
+      }
     }
-  }, [userId, userPreferences, questions.length]);
+  }, [userId, questions.length]);
 
   // Initial fetch on mount
   useEffect(() => {
@@ -95,9 +120,10 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
           clearTimeout(fetchTimeoutRef.current);
         }
         
-        // Immediate refetch (give backend time to save)
+        // Silent update during quiz (no loading state, no interrupt)
         fetchTimeoutRef.current = setTimeout(() => {
-          fetchPreferences(true);
+          const isInQuiz = questions.length > 0;
+          fetchPreferences(true, isInQuiz); // silentUpdate=true if in quiz
         }, QUIZ_CONFIG.POSTMESSAGE_DELAY_MS);
       }
     };
@@ -109,16 +135,19 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
         clearTimeout(fetchTimeoutRef.current);
       }
     };
-  }, [fetchPreferences]);
+  }, [fetchPreferences, questions.length]);
 
   // Optional: Refresh preferences when window regains focus
-  // (only if not during quiz)
+  // Only fetch if NOT during quiz
   useEffect(() => {
     const handleFocus = () => {
-      // Only fetch on focus if not generating quiz and no quiz loaded
+      // Only fetch on focus if NOT generating quiz and NO quiz loaded
       if (!isGeneratingQuiz && questions.length === 0) {
         console.log('[LearnCheck] Window focused - refreshing preferences');
-        fetchPreferences(true);
+        fetchPreferences(true, false);
+      } else if (questions.length > 0) {
+        console.log('[LearnCheck] Window focused but quiz in progress - silent refresh');
+        fetchPreferences(true, true); // Silent update
       }
     };
 

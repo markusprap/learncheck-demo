@@ -362,8 +362,12 @@ const App: React.FC = () => {
   const reset = useQuizStore(state => state.reset);
 
   const handleStartQuiz = async () => {
-    // FIX: Prevent double-click glitch
+    // Prevent double-click and concurrent quiz generation
     if (isGeneratingQuiz || quizStarted) return;
+    
+    // Reset quiz state before starting fresh quiz
+    reset();
+    
     setQuizStarted(true);
     await generateQuiz(); // First attempt: use cache if available
   };

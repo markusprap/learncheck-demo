@@ -91,9 +91,10 @@ export const useQuizStore = create<QuizState & QuizActions>()(
         },
 
         setQuestions: (questions) => set({ 
-          // Fix: The original implementation reset progress. This now only sets the questions,
-          // preserving progress that might have been loaded by `initialize`.
+          // Set questions and ensure quiz is not over (fresh start)
           questions,
+          quizOver: false,
+          revealAnswers: false,
         }),
 
         selectAnswer: (questionId, optionId) => {
