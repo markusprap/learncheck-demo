@@ -490,7 +490,7 @@ npm run build  # Should succeed without errors
 
 **Expected**: First request after idle ~500ms-1s slower
 
-**Not an issue**: Subsequent requests fast (<200ms)
+**Not an issue**: Subsequent requests fast (&lt;200ms)
 
 **If persist**: Check Gemini AI latency (should be ~12-15s)
 
