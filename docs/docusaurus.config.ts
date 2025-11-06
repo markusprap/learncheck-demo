@@ -53,17 +53,11 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
-    image: 'img/docusaurus-social-card.jpg',
     colorMode: {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'My Site',
-      logo: {
-        alt: 'My Site Logo',
-        src: 'img/logo.svg',
-      },
+      title: 'LearnCheck! Docs',
       items: [
         {
           type: 'docSidebar',
@@ -125,7 +119,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} LearnCheck! - Built for Dicoding Classroom`,
+      copyright: `Made with ❤️ by Markus Prap Kurniawan © ${new Date().getFullYear()}`,
     },
     prism: {
       theme: prismThemes.github,
