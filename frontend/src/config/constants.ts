@@ -6,8 +6,7 @@ export const QUIZ_CONFIG = {
   TIMER_DURATION_MINUTES: 5,
   TOTAL_QUESTIONS: 3,
   DEBOUNCE_MS: 200,
-  POLLING_INTERVAL_MS: 500,
-  POSTMESSAGE_DELAY_MS: 300,
+  POSTMESSAGE_DELAY_MS: 300, // Delay for parent window message handling
 } as const;
 
 export const STORAGE_CONFIG = {

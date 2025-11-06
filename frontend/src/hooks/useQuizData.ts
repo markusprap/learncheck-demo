@@ -111,50 +111,23 @@ const useQuizData = (tutorialId: string | null, userId: string | null) => {
     };
   }, [fetchPreferences]);
 
-  // Polling: Check for preference updates every 3 seconds when window is focused
+  // Optional: Refresh preferences when window regains focus
+  // (only if not during quiz)
   useEffect(() => {
-    let pollInterval: NodeJS.Timeout | null = null;
-
-    const startPolling = () => {
-      console.log('[LearnCheck] Starting preference polling...');
-      pollInterval = setInterval(() => {
-        fetchPreferences();
-      }, QUIZ_CONFIG.POLLING_INTERVAL_MS); // Near real-time updates
-    };
-
-    const stopPolling = () => {
-      if (pollInterval) {
-        console.log('[LearnCheck] Stopping preference polling');
-        clearInterval(pollInterval);
-        pollInterval = null;
+    const handleFocus = () => {
+      // Only fetch on focus if not generating quiz and no quiz loaded
+      if (!isGeneratingQuiz && questions.length === 0) {
+        console.log('[LearnCheck] Window focused - refreshing preferences');
+        fetchPreferences(true);
       }
     };
 
-    const handleFocus = () => {
-      console.log('[LearnCheck] Window focused');
-      fetchPreferences(true);
-      startPolling();
-    };
-
-    const handleBlur = () => {
-      console.log('[LearnCheck] Window blurred');
-      stopPolling();
-    };
-
-    // Start polling if window is already focused
-    if (document.hasFocus()) {
-      startPolling();
-    }
-
     window.addEventListener('focus', handleFocus);
-    window.addEventListener('blur', handleBlur);
     
     return () => {
       window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('blur', handleBlur);
-      stopPolling();
     };
-  }, [fetchPreferences]);
+  }, [fetchPreferences, isGeneratingQuiz, questions.length]);
 
   /**
    * Generate quiz with AI

@@ -426,9 +426,12 @@ const App: React.FC = () => {
     if (!quizStarted) {
         return <Intro onStart={handleStartQuiz} isLoading={isLoadingPreferences || isGeneratingQuiz} />;
     }
-    if (isGeneratingQuiz) {
+    
+    // Show loading screen while generating quiz AFTER button click
+    if (quizStarted && isGeneratingQuiz) {
       return <LoadingState />;
     }
+    
     if (error && !assessmentData?.assessment) {
       return <div className="text-red-500 p-4 text-center font-bold">Oops, gagal memuat kuis: {error}</div>;
     }

@@ -2,7 +2,18 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { API_CONFIG, ERROR_MESSAGES } from '../config/constants';
 import type { Assessment } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+// Validate API key exists
+if (!process.env.GEMINI_API_KEY) {
+  console.error('[Gemini] CRITICAL: GEMINI_API_KEY not found in environment variables');
+  throw new Error('GEMINI_API_KEY is required');
+}
+
+// Initialize with API key explicitly
+const ai = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
+console.log('[Gemini] SDK initialized successfully');
 const assessmentSchema = {
     type: Type.OBJECT,
     properties: {
