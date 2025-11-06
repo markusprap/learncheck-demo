@@ -21,12 +21,12 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Lightning Fast with Redis',
+    title: 'Simple & Reliable',
     emoji: '⚡',
     description: (
       <>
-        Performa 12x lebih cepat dengan Upstash Redis caching. 
-        Loading time dari 16 detik menjadi hanya 1.3 detik.
+        Arsitektur sederhana tanpa dependency eksternal. 
+        Direct API calls untuk reliability maksimal dan setup yang mudah.
       </>
     ),
   },

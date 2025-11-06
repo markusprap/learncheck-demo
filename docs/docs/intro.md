@@ -13,10 +13,9 @@ LearnCheck! adalah aplikasi web yang secara otomatis menghasilkan pertanyaan kui
 ## Fitur Utama
 
 - **AI-Generated Questions**: Generate 3 pertanyaan pilihan ganda per tutorial menggunakan Gemini 2.5 Flash
-- **Redis Caching**: Loading 12x lebih cepat dengan Upstash Redis (16 detik → 1.3 detik)
 - **Real-Time Preferences**: Sinkronisasi tema, ukuran font, dan gaya font secara real-time (500ms latency)
 - **Progress Tracking**: Penyimpanan state kuis berbasis LocalStorage dengan isolasi per user/per tutorial
-- **Rate Limiting**: Pembatasan 5 generate kuis per menit per user
+- **Simple & Reliable**: Direct API calls tanpa caching layer untuk reliability maksimal
 - **Responsive Design**: Dioptimalkan untuk desktop dan mobile
 - **Dark Mode**: Mengikuti preferensi user dari Dicoding
 
@@ -60,11 +59,9 @@ learncheck-demo/
 - Google Gemini AI (@google/genai)
 - Axios (HTTP client)
 - Cheerio (HTML parsing)
-- IORedis (Redis client)
 
 ### Infrastructure
 - Vercel (hosting)
-- Upstash Redis (managed Redis)
 - Dicoding Mock API (content source)
 
 ## Mulai Cepat
@@ -78,7 +75,7 @@ cd learncheck-demo
 cd backend
 npm install
 cp .env.example .env
-# Tambahkan GEMINI_API_KEY dan REDIS_URL ke .env
+# Tambahkan GEMINI_API_KEY ke .env
 npm run dev
 
 # Setup frontend (terminal baru)
@@ -91,6 +88,7 @@ Buka http://localhost:5173?tutorial_id=35363&user_id=1 untuk testing.
 
 ## Tutorial
 
+
 Ikuti tutorial step-by-step untuk membangun aplikasi ini dari awal:
 
 1. [Setup Project](./tutorial/01-setup.md)
@@ -99,8 +97,16 @@ Ikuti tutorial step-by-step untuk membangun aplikasi ini dari awal:
 4. [Frontend dengan React](./tutorial/04-frontend.md)
 5. [State Management dengan Zustand](./tutorial/05-state.md)
 6. [Real-Time Preferences](./tutorial/06-realtime.md)
-7. [Redis Caching](./tutorial/07-redis.md)
-8. [Deploy ke Vercel](./tutorial/08-deployment.md)
+7. [Deploy ke Vercel](./tutorial/07-deployment.md)
+
+## Kontribusi
+
+Kontribusi selalu diterima! Silakan buat pull request atau issue di [GitHub repository](https://github.com/markusprap/learncheck-demo).
+
+## Lisensi
+
+MIT License - silakan gunakan project ini sebagai referensi!
+
 
 ## Kontribusi
 

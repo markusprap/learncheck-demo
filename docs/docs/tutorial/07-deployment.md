@@ -1,5 +1,5 @@
 ---
-sidebar_position: 8
+sidebar_position: 7
 ---
 
 # Deploy ke Vercel
@@ -21,7 +21,6 @@ Saatnya deploy aplikasi kita ke production! Vercel adalah platform terbaik untuk
 2. **Vercel Account**: Sign up di [vercel.com](https://vercel.com)
 3. **Environment Variables Ready**:
    - GEMINI_API_KEY
-   - REDIS_URL
 
 ## Step 1: Push ke GitHub
 
@@ -184,11 +183,10 @@ Di Vercel dashboard:
 
 1. Go to Project Settings
 2. Klik "Environment Variables"
-3. Add variables:
+3. Add variable:
 
 ```
 GEMINI_API_KEY = AIzaSyXXXXXXXXXXXXXXXXX
-REDIS_URL = rediss://default:token@hostname.upstash.io:6379
 ```
 
 4. Select scope: **Production**, **Preview**, **Development**
@@ -196,7 +194,7 @@ REDIS_URL = rediss://default:token@hostname.upstash.io:6379
 
 ## Step 7: Redeploy
 
-Setelah add env variables, trigger redeploy:
+Setelah add env variable, trigger redeploy:
 
 ```bash
 # Push any change
@@ -348,8 +346,8 @@ Test via health endpoint:
 ```typescript
 app.get('/api/health', (req, res) => {
   res.json({
+    status: 'ok',
     hasGemini: !!process.env.GEMINI_API_KEY,
-    hasRedis: !!process.env.REDIS_URL,
   });
 });
 ```

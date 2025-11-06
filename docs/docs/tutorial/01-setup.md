@@ -48,7 +48,7 @@ npm init -y
 Install dependencies:
 
 ```bash
-npm install express cors dotenv axios cheerio @google/genai ioredis
+npm install express cors dotenv axios cheerio @google/genai
 npm install -D typescript @types/node @types/express @types/cors ts-node-dev
 ```
 
@@ -161,7 +161,6 @@ Isi `.env`:
 ```env
 PORT=4000
 GEMINI_API_KEY=your_gemini_api_key_here
-REDIS_URL=your_redis_url_here
 ```
 
 ## Langkah 5: Git Ignore

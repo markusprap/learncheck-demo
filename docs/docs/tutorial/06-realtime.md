@@ -383,4 +383,4 @@ Latency ≤ 500ms. Almost instant! 🚀
 
 ## Next Steps
 
-Lanjut ke [Redis Caching](./07-redis.md) →
+Lanjut ke [Deploy ke Vercel](./07-deployment.md) →
