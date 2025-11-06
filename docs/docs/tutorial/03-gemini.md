@@ -8,223 +8,553 @@ Di tutorial ini, kita akan mengintegrasikan Google Gemini AI untuk generate pert
 
 ## Apa itu Gemini AI?
 
-Gemini adalah model AI terbaru dari Google yang bisa memahami teks dan generate konten. Kita akan pakai Gemini untuk:
-1. Baca konten tutorial dari Dicoding
-2. Analisis materi yang ada
-3. Generate 3 pertanyaan pilihan ganda yang relevan
-4. Buat penjelasan untuk setiap jawaban
+**Gemini** adalah model AI terbaru dari Google yang bisa:
+- 🧠 Memahami dan menganalisis teks panjang
+- ✍️ Generate konten terstruktur (JSON)
+- 🎯 Membuat pertanyaan yang relevan dengan materi
+- 🇮🇩 Menulis dalam Bahasa Indonesia yang natural
+
+## Kenapa Gemini?
+
+1. **Fast**: Response ~10-15 detik (lebih cepat dari GPT-4)
+2. **Structured Output**: Bisa generate JSON langsung dengan schema validation
+3. **Affordable**: Free tier 60 requests/minute (cukup untuk development)
+4. **Multilingual**: Bagus untuk Bahasa Indonesia
 
 ## Dapatkan API Key
 
-1. Buka [Google AI Studio](https://ai.google.dev/)
-2. Login dengan akun Google
-3. Klik "Get API Key"
-4. Copy API key yang didapat
-5. Simpan di file `.env`:
+### Step 1: Buka Google AI Studio
+
+Pergi ke [https://ai.google.dev/](https://ai.google.dev/)
+
+### Step 2: Login dengan Akun Google
+
+Gunakan akun Google pribadi atau workspace kamu.
+
+### Step 3: Get API Key
+
+Klik tombol **"Get API Key"** → **"Create API key"**
+
+API key format: `AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXX`
+
+### Step 4: Simpan di .env
+
+Buat file `backend/.env`:
+
+```bash
+cd backend
+touch .env
+```
+
+Isi dengan API key kamu:
 
 ```env
 GEMINI_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+PORT=4000
 ```
+
+⚠️ **JANGAN COMMIT .env KE GIT!** File ini sudah ada di `.gitignore`.
 
 ## Install Package
 
 ```bash
 cd backend
-npm install @google/genai
+npm install @google/genai@1.28.0
 ```
 
-**Catatan Penting**: Kita pakai `@google/genai` bukan `@google/generative-ai`. Package ini versi terbaru dengan API yang lebih simple.
+**CRITICAL**: Pakai versi `1.28.0` yang exact! Versi ini yang stabil dan compatible dengan structured output.
+
+❌ **JANGAN pakai**: `@google/generative-ai` (package lama)
+✅ **GUNAKAN**: `@google/genai` (package baru)
 
 ## Buat Gemini Service
+
+Sekarang kita buat service untuk handle AI generation. Ini file paling penting di backend!
 
 Buat file `backend/src/services/gemini.service.ts`:
 
 ```typescript
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
+import { API_CONFIG, ERROR_MESSAGES } from '../config/constants';
+import type { Assessment } from '../types';
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY!,
+// Validate API key exists
+if (!process.env.GEMINI_API_KEY) {
+  console.error('[Gemini] CRITICAL: GEMINI_API_KEY not found in environment variables');
+  throw new Error('GEMINI_API_KEY is required');
+}
+
+// Initialize with API key explicitly
+const ai = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY,
 });
 
-export const generateAssessmentQuestions = async (textContent: string) => {
-  if (!textContent || textContent.trim().length === 0) {
-    throw new Error('Text content is required');
-  }
+console.log('[Gemini] SDK initialized successfully');
 
-  const model = 'gemini-2.0-flash-exp';
-  
-  const prompt = `Kamu adalah asisten AI yang ahli dalam membuat soal kuis...`;
-  
+const assessmentSchema = {
+    type: Type.OBJECT,
+    properties: {
+        questions: {
+            type: Type.ARRAY,
+            description: "Sebuah array berisi 3 pertanyaan pilihan ganda.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    id: {
+                        type: Type.STRING,
+                        description: "ID unik untuk pertanyaan, contoh: 'q1', 'q2'."
+                    },
+                    questionText: {
+                        type: Type.STRING,
+                        description: "Teks pertanyaan."
+                    },
+                    options: {
+                        type: Type.ARRAY,
+                        description: "Sebuah array berisi 4 pilihan jawaban.",
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                id: {
+                                    type: Type.STRING,
+                                    description: "ID unik untuk pilihan, contoh: 'opt1', 'opt2'."
+                                },
+                                text: {
+                                    type: Type.STRING,
+                                    description: "Teks jawaban."
+                                }
+                            },
+                            required: ["id", "text"]
+                        }
+                    },
+                    correctOptionId: {
+                        type: Type.STRING,
+                        description: "ID dari pilihan jawaban yang benar dari array 'options'."
+                    },
+                    explanation: {
+                        type: Type.STRING,
+                        description: "Penjelasan netral yang fokus pada konsep, menjelaskan mengapa jawaban benar dan yang lain salah. Harus diakhiri dengan 'Hint:' diikuti petunjuk."
+                    }
+                },
+                required: ["id", "questionText", "options", "correctOptionId", "explanation"]
+            }
+        }
+    },
+    required: ["questions"]
+};
+
+/**
+ * Generate assessment questions using Gemini AI
+ * @param textContent - Clean text content from tutorial
+ * @returns Assessment object with generated questions
+ * @throws Error if generation fails or response is empty
+ */
+export const generateAssessmentQuestions = async (textContent: string): Promise<Assessment> => {
+  const prompt = `
+    Berdasarkan konten berikut, buatkan 3 pertanyaan pilihan ganda dalam Bahasa Indonesia untuk menguji pemahaman.
+    Setiap pertanyaan harus memiliki 4 pilihan jawaban.
+    Untuk setiap pertanyaan, sertakan teks pertanyaan, 4 pilihan jawaban (masing-masing dengan ID unik seperti 'opt1', 'opt2', dst.), ID dari pilihan yang benar, dan sebuah penjelasan.
+    
+    Penting: Ikuti aturan ini saat membuat penjelasan:
+    - Mulai penjelasan secara langsung tanpa kalimat pembuka yang bersifat menilai seperti "Tepat sekali!" atau "Kurang tepat.". Penjelasan harus fokus pada konsepnya.
+    - Jelaskan mengapa jawaban yang benar itu benar dan mengapa pilihan-pilihan lain salah, merujuk ke konsep inti dari materi.
+    - Jaga agar penjelasan singkat (maksimal 3 kalimat).
+    - Setelah penjelasan utama, tambahkan "Hint:" diikuti dengan satu kalimat rekomendasi untuk mempelajari kembali topik spesifik yang relevan dengan pertanyaan ini. Contoh: "Untuk lebih paham, coba pelajari lagi materi tentang state di React."
+    - Tulis dalam Bahasa Indonesia yang kasual namun profesional.
+    
+    Gunakan gaya bahasa yang santai dan mudah dimengerti untuk seluruh soal.
+
+    Konten:
+    ---
+    ${textContent}
+    ---
+  `;
+
   try {
     const response = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      model: API_CONFIG.GEMINI_MODEL,
+      contents: prompt,
       config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          properties: {
-            questions: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  text: { type: 'string' },
-                  options: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        id: { type: 'string' },
-                        text: { type: 'string' }
-                      }
-                    }
-                  },
-                  correctOptionId: { type: 'string' },
-                  explanation: { type: 'string' }
-                }
-              }
-            }
-          }
-        }
-      }
+        responseMimeType: "application/json",
+        responseSchema: assessmentSchema,
+      },
     });
-
-    const text = response.text;
-    if (!text) {
-      throw new Error('Empty response from Gemini');
+    
+    const jsonText = response.text;
+    if (!jsonText) {
+      throw new Error(ERROR_MESSAGES.EMPTY_GEMINI_RESPONSE);
     }
-
-    return JSON.parse(text);
-  } catch (error: any) {
-    console.error('Gemini API error:', error);
-    throw new Error(`Failed to generate questions: ${error.message}`);
+    
+    return JSON.parse(jsonText) as Assessment;
+  } catch (error) {
+    console.error("[Gemini] Error generating assessment:", error);
+    throw new Error(ERROR_MESSAGES.GEMINI_GENERATION_FAILED);
   }
 };
 ```
 
-## Penjelasan Kode
+## Penjelasan Kode (Step by Step)
 
-### 1. Inisialisasi AI Client
+### 1. Import Dependencies
 
 ```typescript
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY!,
+import { GoogleGenAI, Type } from '@google/genai';
+```
+
+- `GoogleGenAI`: Main class untuk initialize AI client
+- `Type`: Enum untuk define schema (Type.OBJECT, Type.ARRAY, Type.STRING)
+
+### 2. API Key Validation
+
+```typescript
+if (!process.env.GEMINI_API_KEY) {
+  console.error('[Gemini] CRITICAL: GEMINI_API_KEY not found');
+  throw new Error('GEMINI_API_KEY is required');
+}
+```
+
+**Kenapa di sini?** 
+
+Karena code ini **di-run saat module loading** (bukan di function). Jika API key tidak ada, aplikasi langsung crash dengan error message yang jelas.
+
+### 3. Initialize AI Client
+
+```typescript
+const ai = new GoogleGenAI({ 
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
+console.log('[Gemini] SDK initialized successfully');
+```
+
+Console.log ini muncul saat backend start. Jika kamu lihat log ini, berarti API key berhasil loaded!
+
+### 4. Schema Definition (CRITICAL!)
+
+```typescript
+const assessmentSchema = {
+    type: Type.OBJECT,
+    properties: {
+        questions: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    id: { type: Type.STRING },
+                    questionText: { type: Type.STRING },
+                    options: { type: Type.ARRAY, items: {...} },
+                    correctOptionId: { type: Type.STRING },
+                    explanation: { type: Type.STRING }
+                }
+            }
+        }
+    }
+};
+```
+
+**Kenapa butuh schema?**
+
+Tanpa schema, Gemini bisa return format apapun:
+```json
+// ❌ Bisa jadi kayak gini (gak konsisten)
+{
+  "soal": [...],  // key name beda
+  "pertanyaan": [...],  // format gak pasti
+}
+```
+
+Dengan schema, response **PASTI** format yang kita mau:
+```json
+// ✅ Selalu format ini
+{
+  "questions": [
+    {
+      "id": "q1",
+      "questionText": "...",
+      "options": [...],
+      "correctOptionId": "opt1",
+      "explanation": "..."
+    }
+  ]
+}
+```
+
+### 5. Prompt Engineering (Seni Bicara ke AI)
+
+```typescript
+const prompt = `
+    Berdasarkan konten berikut, buatkan 3 pertanyaan pilihan ganda dalam Bahasa Indonesia...
+    
+    Penting: Ikuti aturan ini saat membuat penjelasan:
+    - Mulai penjelasan secara langsung tanpa kalimat pembuka...
+    - Jelaskan mengapa jawaban yang benar itu benar...
+    - Jaga agar penjelasan singkat (maksimal 3 kalimat).
+    - Setelah penjelasan utama, tambahkan "Hint:"...
+`;
+```
+
+**Kenapa prompt ini panjang?**
+
+AI itu kayak junior developer—butuh instruksi yang **sangat spesifik**:
+
+❌ **Prompt jelek**:
+```
+Buatkan 3 soal tentang materi ini.
+```
+Result: Soal gak relevan, penjelasan ambiguous, format gak konsisten.
+
+✅ **Prompt bagus** (yang kita pakai):
+```
+- Buatkan 3 pertanyaan pilihan ganda dalam Bahasa Indonesia
+- Setiap pertanyaan 4 pilihan jawaban
+- Penjelasan harus fokus pada konsep (bukan "Tepat sekali!")
+- Penjelasan maksimal 3 kalimat
+- Akhiri dengan "Hint:" diikuti rekomendasi belajar
+```
+Result: Soal relevan, penjelasan jelas, format konsisten!
+
+### 6. Generate Content with Schema
+
+```typescript
+const response = await ai.models.generateContent({
+  model: API_CONFIG.GEMINI_MODEL,  // 'gemini-2.5-flash'
+  contents: prompt,
+  config: {
+    responseMimeType: "application/json",  // Force JSON output
+    responseSchema: assessmentSchema,      // Validate structure
+  },
 });
 ```
 
-Kita buat instance GoogleGenAI dengan API key dari environment variable.
+**Parameters Explained**:
 
-### 2. Model yang Digunakan
+- `model`: Model name (kita pakai `gemini-2.5-flash` yang balance speed vs quality)
+- `contents`: Prompt yang kita kirim
+- `responseMimeType: "application/json"`: Paksa Gemini return JSON (bukan text biasa)
+- `responseSchema`: Schema validation (struktur HARUS sesuai schema kita)
 
-```typescript
-const model = 'gemini-2.0-flash-exp';
-```
-
-Kita pakai Gemini 2.0 Flash Experimental karena:
-- Lebih cepat (response dalam 1-2 detik)
-- Gratis untuk development
-- Sudah cukup untuk generate pertanyaan kuis
-
-### 3. Structured Output
+### 7. Parse and Return
 
 ```typescript
-responseMimeType: 'application/json',
-responseSchema: { ... }
+const jsonText = response.text;
+if (!jsonText) {
+  throw new Error(ERROR_MESSAGES.EMPTY_GEMINI_RESPONSE);
+}
+
+return JSON.parse(jsonText) as Assessment;
 ```
 
-Ini fitur penting! Kita define schema JSON yang kita mau, dan Gemini akan SELALU return response sesuai format yang kita tentukan. Tidak perlu parsing yang ribet.
+Response dari Gemini itu string JSON. Kita parse jadi object TypeScript.
 
-### 4. Prompt Engineering
+## Update Constants
 
-Prompt yang bagus itu penting! Kita beri instruksi spesifik:
-- Buat 3 pertanyaan
-- Bahasa Indonesia
-- Format pilihan ganda (A, B, C, D)
-- Kasih penjelasan lengkap
-- Tambahkan hint kalau perlu
-
-## Test Gemini Service
-
-Buat file test `backend/src/test-gemini.ts`:
+Pastikan `backend/src/config/constants.ts` punya model name:
 
 ```typescript
-import dotenv from 'dotenv';
-import { generateAssessmentQuestions } from './services/gemini.service';
-
-dotenv.config();
-
-const testContent = `
-Convolutional Neural Network (CNN) adalah jenis jaringan saraf tiruan yang dirancang khusus untuk memproses data yang memiliki pola grid, seperti gambar. CNN menggunakan operasi konvolusi untuk mengekstrak fitur dari gambar secara hierarkis.
-`;
-
-generateAssessmentQuestions(testContent)
-  .then(result => {
-    console.log('Generated Questions:');
-    console.log(JSON.stringify(result, null, 2));
-  })
-  .catch(error => {
-    console.error('Error:', error);
-  });
+export const API_CONFIG = {
+  DICODING_BASE_URL: 'https://learncheck-dicoding-mock-666748076441.europe-west1.run.app/api',
+  GEMINI_MODEL: 'gemini-2.5-flash',  // ← Pastikan ini ada!
+  REQUEST_TIMEOUT: 30000,
+} as const;
 ```
 
-Jalankan test:
+## Test Gemini Integration
+
+### Test 1: Backend Start (Check API Key Loading)
 
 ```bash
-npx ts-node src/test-gemini.ts
+cd backend
+npm run dev
 ```
 
-Kalau berhasil, kamu akan lihat 3 pertanyaan tentang CNN!
+Expected output:
+```
+[Gemini] SDK initialized successfully  ← Ini harus muncul!
+🚀 Backend server running on http://localhost:4000
+```
 
-## Error Handling
+❌ **Jika error**: "GEMINI_API_KEY not found"
+→ Check `.env` file ada dan isinya benar
 
-Gemini API bisa gagal karena:
-1. **API Key Invalid**: Cek lagi key nya
-2. **Rate Limit**: Terlalu banyak request (max 60/menit untuk free tier)
-3. **Content Too Long**: Gemini 2.0 Flash bisa handle max 1M tokens
-4. **Network Error**: Koneksi internet bermasalah
+### Test 2: Generate Quiz
 
-Kita handle dengan try-catch dan kasih error message yang jelas.
+```bash
+curl "http://localhost:4000/api/v1/assessment?tutorial_id=35363&user_id=1"
+```
 
-## Tips & Tricks
+**Process flow**:
+1. Backend fetch tutorial HTML dari Dicoding mock API (~1s)
+2. Parse HTML ke clean text (~0.1s)
+3. Send text ke Gemini AI (~12-15s) ← **This takes time!**
+4. Parse response JSON (~0.1s)
+5. Return ke client
 
-### 1. Optimasi Prompt
-
-Semakin spesifik prompt, semakin bagus hasilnya:
-- "Buat 3 pertanyaan tentang..." ✅
-- "Buat pertanyaan..." ❌
-
-### 2. Temperature Setting
-
-```typescript
-config: {
-  temperature: 0.7, // 0-1, makin tinggi makin creative
+Expected response:
+```json
+{
+  "assessment": {
+    "questions": [
+      {
+        "id": "q1",
+        "questionText": "Apa fungsi dari useState hook di React?",
+        "options": [
+          { "id": "opt1", "text": "Mengelola state komponen" },
+          { "id": "opt2", "text": "Melakukan fetch data" },
+          { "id": "opt3", "text": "Styling komponen" },
+          { "id": "opt4", "text": "Routing aplikasi" }
+        ],
+        "correctOptionId": "opt1",
+        "explanation": "useState adalah hook untuk mengelola state di functional component. Hook ini mengembalikan array dengan nilai state dan setter function. Options lain tidak sesuai dengan fungsi useState. Hint: Pelajari lagi materi tentang React Hooks dan state management."
+      },
+      {
+        "id": "q2",
+        "questionText": "...",
+        "options": [...],
+        "correctOptionId": "...",
+        "explanation": "..."
+      },
+      {
+        "id": "q3",
+        "questionText": "...",
+        "options": [...],
+        "correctOptionId": "...",
+        "explanation": "..."
+      }
+    ]
+  },
+  "userPreferences": {
+    "theme": "dark",
+    "fontSize": "medium",
+    "fontStyle": "default",
+    "layoutWidth": "standard"
+  },
+  "fromCache": false
 }
 ```
 
-- 0.3-0.5: Konsisten, cocok untuk kuis
-- 0.7-0.9: Variatif, cocok untuk konten kreatif
+## Format Explanation & Hint
 
-### 3. Max Tokens
+Perhatikan format `explanation`:
 
 ```typescript
-config: {
-  maxOutputTokens: 2048,
+"explanation": "useState adalah hook untuk mengelola state... Hint: Pelajari lagi materi tentang React Hooks."
+```
+
+**Kenapa split dengan "Hint:"?**
+
+Frontend akan split string ini:
+```typescript
+const parts = explanation.split('Hint:');
+const mainExplanation = parts[0];  // "useState adalah hook..."
+const hintText = parts[1];          // "Pelajari lagi materi..."
+```
+
+Terus display dengan styling berbeda:
+- Main explanation: Text biasa
+- Hint: Dengan icon 💡 dan background khusus
+
+## Common Issues & Solutions
+
+### Issue 1: "Rate limit exceeded"
+
+**Cause**: Terlalu banyak request ke Gemini (free tier: 60 req/min)
+
+**Solution**: 
+- Add delay antar request
+- Implement caching (optional)
+- Upgrade ke paid plan
+
+### Issue 2: Empty response dari Gemini
+
+**Cause**: Prompt terlalu panjang atau content tidak valid
+
+**Solution**:
+```typescript
+// Add content length check
+if (textContent.length > 10000) {
+  textContent = textContent.substring(0, 10000);
 }
 ```
 
-Batasi output supaya tidak terlalu panjang dan hemat cost.
+### Issue 3: Response format gak sesuai schema
+
+**Cause**: Schema definition salah atau Gemini error
+
+**Solution**: Check logs:
+```typescript
+console.log('[Gemini] Raw response:', response.text);
+```
+
+## Performance Tips
+
+### 1. Content Length
+
+Jangan kirim HTML mentah! Parse dulu ke clean text:
+
+```typescript
+// ❌ Bad (kirim HTML)
+const htmlContent = await getTutorialContent(tutorialId);
+await generateAssessmentQuestions(htmlContent);  // 50KB HTML!
+
+// ✅ Good (parse dulu)
+const htmlContent = await getTutorialContent(tutorialId);
+const textContent = parseHtmlContent(htmlContent);  // 5KB text
+await generateAssessmentQuestions(textContent);  // Faster!
+```
+
+### 2. Prompt Optimization
+
+Makin spesifik prompt, makin cepat response:
+
+```typescript
+// ❌ Slow (ambiguous)
+"Buatkan soal tentang materi ini"
+
+// ✅ Fast (specific)
+"Buatkan 3 pertanyaan pilihan ganda dalam Bahasa Indonesia..."
+```
+
+### 3. Parallel Processing (Already implemented!)
+
+```typescript
+// ✅ Fetch content dan preferences parallel
+const [tutorialHtml, userPreferences] = await Promise.all([
+  getTutorialContent(tutorialId),
+  getUserPreferences(userId),
+]);
+```
+
+## Architecture Flow
+
+```
+Client Request
+    ↓
+Controller (assessment.controller.ts)
+    ↓
+Service (assessment.service.ts)
+    ↓
+Dicoding Service → Fetch HTML
+    ↓
+HTML Parser → Clean text
+    ↓
+Gemini Service → Generate questions  ← WE ARE HERE!
+    ↓
+Return JSON to client
+```
 
 ## Kesimpulan
 
-Sekarang kita punya service yang bisa:
-- Generate pertanyaan kuis otomatis
-- Format output yang konsisten (JSON schema)
-- Error handling yang proper
+Gemini AI integration kita sekarang punya:
+- ✅ API key validation (crash early if missing)
+- ✅ Structured output dengan schema (consistent format)
+- ✅ Indonesian language support (natural Bahasa Indonesia)
+- ✅ Hint format (split by "Hint:" for UI display)
+- ✅ Error handling (proper error messages)
+- ✅ Type safety (TypeScript return type)
 
-Di tutorial berikutnya, kita akan integrasikan ini dengan Dicoding API untuk scrape konten tutorial!
+Response time: **~12-15 detik** untuk generate 3 questions. Acceptable untuk learning tool!
 
 ## Next Steps
 
-Lanjut ke [Frontend dengan React](./04-frontend.md) →
+Backend udah complete! Sekarang kita build frontend React untuk display quiz.
+
+Lanjut ke [Frontend dengan React & Vite](./04-frontend.md) →

@@ -2,81 +2,194 @@
 sidebar_position: 4
 ---
 
-# Frontend dengan React
+# Frontend dengan React & Vite
 
-Sekarang kita buat frontend untuk aplikasi kuis kita! Kita akan pakai React dengan TypeScript dan Tailwind CSS untuk styling.
+Di tutorial ini, kita akan build frontend React dengan Vite yang display quiz, handle user interaction, dan apply user preferences.
 
-## Kenapa React?
+## Kenapa React + Vite?
 
-- **Component-based**: Code lebih terorganisir dan reusable
-- **TypeScript**: Type safety, error lebih sedikit
-- **Fast Development**: Hot reload, development server cepat
-- **Large Ecosystem**: Banyak library pendukung
+### React
+- **Component-based**: UI dipecah jadi small, reusable components
+- **Declarative**: Kamu describe apa yang mau ditampilin, React handle sisanya
+- **Rich Ecosystem**: Banyak library pendukung (state management, routing, etc.)
 
-## Install Dependencies
+### Vite
+- **Super Fast**: Hot Module Replacement (HMR) ~50ms
+- **No Config**: Works out of the box untuk React + TypeScript
+- **Modern**: ES modules, optimized build
 
-```bash
-cd frontend
-npm install zustand axios lucide-react clsx tailwind-merge
+Alternatif: Create React App (CRA) tapi lebih lambat dan bloated.
+
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── main.tsx              # Entry point
+│   ├── App.tsx               # Main component (468 lines!)
+│   ├── index.css             # Tailwind directives
+│   ├── types.ts              # TypeScript interfaces
+│   ├── components/
+│   │   ├── layout/           # Layout components (future)
+│   │   └── ui/               # Reusable UI components
+│   │       ├── Card.tsx
+│   │       ├── Button.tsx
+│   │       ├── Loader.tsx
+│   │       └── LoadingState.tsx
+│   ├── config/
+│   │   └── constants.ts      # Frontend constants
+│   ├── features/
+│   │   └── quiz/             # Quiz-specific components (future)
+│   ├── hooks/
+│   │   └── useQuizData.ts    # Custom hook untuk data fetching
+│   ├── services/
+│   │   └── api.ts            # Axios instance
+│   └── store/
+│       └── useQuizStore.ts   # Zustand state management
+├── index.html                # HTML entry point
+├── vite.config.ts            # Vite configuration
+├── tailwind.config.js        # Tailwind CSS config
+├── postcss.config.js         # PostCSS config
+└── package.json
 ```
 
-**Package yang kita pakai**:
-- `zustand`: State management (lebih simple dari Redux)
-- `axios`: HTTP client untuk API calls
-- `lucide-react`: Icon library yang modern
-- `clsx` & `tailwind-merge`: Utility untuk className
+## Setup Tailwind CSS (BUILD SYSTEM, NOT CDN!)
 
-## Setup Tailwind CSS
+**CRITICAL**: Kita pakai Tailwind **build system**, BUKAN CDN!
 
-Sudah kita setup di tutorial sebelumnya. Tambahkan warna Dicoding:
+### Kenapa?
 
-```javascript
-// tailwind.config.js
-export default {
-  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
-  darkMode: 'class',
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          DEFAULT: '#00C4CC', // Warna cyan khas Dicoding
-          50: '#E0F9FA',
-          500: '#00C4CC',
-          600: '#00B0B8',
-          900: '#006266',
-        },
-      },
-    },
+❌ **CDN Approach** (jangan pakai):
+```html
+<!-- index.html -->
+<script src="https://cdn.tailwindcss.com"></script>
+```
+Problems:
+- Custom colors TIDAK work (`primary-500`, dll)
+- Production bundle besar (include semua Tailwind classes)
+- Slower loading time
+
+✅ **Build System** (yang kita pakai):
+```css
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+Benefits:
+- Custom colors WORK! 
+- Production bundle kecil (only used classes)
+- Faster loading time
+
+### Setup Steps
+
+File `tailwind.config.js` udah dibuat di Tutorial 01. Sekarang buat `src/index.css`:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+**Simple tapi CRITICAL!** Tiga directives ini inject Tailwind classes ke CSS build kamu.
+
+## Entry Point: main.tsx
+
+Buat file `frontend/src/main.tsx`:
+
+```tsx
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+    throw new Error("Could not find root element to mount to");
+}
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+```
+
+**Penjelasan**:
+- `import './index.css'`: **CRITICAL!** Load Tailwind CSS
+- `React.StrictMode`: Enable extra checks during development
+- `ReactDOM.createRoot`: React 18 concurrent rendering
+
+## API Configuration
+
+Buat `frontend/src/services/api.ts`:
+
+```typescript
+
+import axios from 'axios';
+
+// TODO: Replace with environment variable for production
+const API_BASE_URL = '/api/v1'; // Vercel will redirect this to your backend
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
   },
-  plugins: [],
+});
+
+export default api;
+```
+
+**Kenapa `/api/v1`?**
+
+Vercel routing di `vercel.json`:
+```json
+{
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/backend/src/index.ts" }
+  ]
 }
 ```
 
-## Struktur Folder Frontend
+Request ke `/api/v1/assessment` → routed ke backend serverless function!
 
+## Frontend Constants
+
+Buat `frontend/src/config/constants.ts`:
+
+```typescript
+/**
+ * Frontend application constants
+ */
+
+export const QUIZ_CONFIG = {
+  TIMER_DURATION_MINUTES: 5,
+  TOTAL_QUESTIONS: 3,
+  DEBOUNCE_MS: 200,
+  POSTMESSAGE_DELAY_MS: 300, // Delay for parent window message handling
+} as const;
+
+export const STORAGE_CONFIG = {
+  KEY_PREFIX: 'learncheck',
+} as const;
+
+export const API_ENDPOINTS = {
+  PREFERENCES: '/preferences',
+  ASSESSMENT: '/assessment',
+} as const;
+
+export const THEME_OPTIONS = ['dark', 'light'] as const;
+export const FONT_SIZE_OPTIONS = ['small', 'medium', 'large'] as const;
+export const FONT_STYLE_OPTIONS = ['default', 'serif', 'mono'] as const;
+export const LAYOUT_WIDTH_OPTIONS = ['fullWidth', 'standard'] as const;
 ```
-frontend/src/
-├── components/       # Komponen UI reusable
-│   ├── ui/          # Button, Card, Loader
-│   └── layout/      # QuizContainer
-├── features/        # Feature-based modules
-│   └── quiz/        # Quiz, Question, Results
-├── hooks/           # Custom React hooks
-│   └── useQuizData.ts
-├── services/        # API client
-│   └── api.ts
-├── store/           # Zustand store
-│   └── useQuizStore.ts
-├── config/          # Constants
-│   └── constants.ts
-├── types.ts         # TypeScript interfaces
-├── App.tsx          # Main component
-└── main.tsx         # Entry point
-```
 
-## TypeScript Interfaces
+## TypeScript Types
 
-Buat `src/types.ts`:
+Buat `frontend/src/types.ts`:
 
 ```typescript
 export interface Option {
@@ -86,7 +199,7 @@ export interface Option {
 
 export interface Question {
   id: string;
-  text: string;
+  questionText: string;
   options: Option[];
   correctOptionId: string;
   explanation: string;
@@ -96,144 +209,37 @@ export interface Assessment {
   questions: Question[];
 }
 
+export interface UserPreferences {
+  theme: 'dark' | 'light';
+  fontSize: 'small' | 'medium' | 'large';
+  fontStyle: 'default' | 'serif' | 'mono';
+  layoutWidth: 'fullWidth' | 'standard';
+}
+
 export interface AssessmentData {
   assessment: Assessment;
+  userPreferences: UserPreferences;
   fromCache: boolean;
 }
-
-export interface UserPreferences {
-  theme: 'light' | 'dark';
-  fontSize: 'small' | 'medium' | 'large';
-  fontStyle: 'sans' | 'serif' | 'mono';
-  layoutWidth: 'standard' | 'fullWidth';
-}
 ```
 
-## API Client
-
-Buat `src/services/api.ts`:
-
-```typescript
-import axios from 'axios';
-
-const api = axios.create({
-  baseURL: '/api/v1',
-  timeout: 30000, // 30 detik (Gemini bisa lama)
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-export default api;
-```
-
-Simple! `baseURL` pointing ke `/api/v1` yang akan di-rewrite Vercel ke backend.
-
-## Constants
-
-Buat `src/config/constants.ts`:
-
-```typescript
-export const QUIZ_CONFIG = {
-  TIMER_DURATION_MINUTES: 5,
-  DEBOUNCE_MS: 200,
-  POLLING_INTERVAL_MS: 500,
-  POSTMESSAGE_DELAY_MS: 300,
-};
-
-export const API_ENDPOINTS = {
-  PREFERENCES: '/preferences',
-  ASSESSMENT: '/assessment',
-};
-
-export const RESULT_MESSAGES = {
-  PERFECT: {
-    title: "Luar Biasa! Pemahaman Sempurna!",
-    subtitle: "Kamu benar-benar menguasai materi ini."
-  },
-  EXCELLENT: {
-    title: "Kerja Bagus! Kamu di Jalur yang Tepat!",
-    subtitle: "Pemahamanmu sudah sangat solid."
-  },
-  GOOD: {
-    title: "Sudah Cukup Baik! Terus Asah Lagi!",
-    subtitle: "Dasar-dasarnya sudah kamu pegang."
-  },
-  NEED_IMPROVEMENT: {
-    title: "Jangan Menyerah, Ini Baru Permulaan!",
-    subtitle: "Setiap ahli pernah menjadi pemula."
-  },
-};
-```
-
-## Komponen UI Dasar
-
-### Button Component
-
-Buat `src/components/ui/Button.tsx`:
-
-```typescript
-import React from 'react';
-import { twMerge } from 'tailwind-merge';
-import { clsx } from 'clsx';
-
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost';
-  size?: 'default' | 'sm' | 'lg';
-}
-
-const Button: React.FC<ButtonProps> = ({ 
-  className, 
-  variant = 'primary', 
-  size = 'default', 
-  ...props 
-}) => {
-  const baseStyles = 'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
-
-  const variants = {
-    primary: 'bg-primary text-white hover:bg-primary-600',
-    secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200',
-    ghost: 'bg-transparent hover:bg-slate-100',
-  };
-
-  const sizes = {
-    default: 'h-10 py-2 px-4',
-    sm: 'h-9 px-3 rounded-md',
-    lg: 'h-11 px-8 rounded-md text-base'
-  };
-
-  return (
-    <button 
-      className={twMerge(clsx(baseStyles, variants[variant], sizes[size], className))} 
-      {...props} 
-    />
-  );
-};
-
-export default Button;
-```
+## Reusable UI Components
 
 ### Card Component
 
-Buat `src/components/ui/Card.tsx`:
+Buat `frontend/src/components/ui/Card.tsx`:
 
-```typescript
+```tsx
 import React from 'react';
-import { twMerge } from 'tailwind-merge';
 
-interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface CardProps {
   children: React.ReactNode;
+  className?: string;
 }
 
-const Card: React.FC<CardProps> = ({ className, children, ...props }) => {
+const Card: React.FC<CardProps> = ({ children, className = '' }) => {
   return (
-    <div
-      className={twMerge(
-        'bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-200 dark:border-slate-700',
-        className
-      )}
-      {...props}
-    >
+    <div className={`bg-white dark:bg-slate-800 rounded-lg shadow-lg ${className}`}>
       {children}
     </div>
   );
@@ -242,17 +248,80 @@ const Card: React.FC<CardProps> = ({ className, children, ...props }) => {
 export default Card;
 ```
 
+### Button Component
+
+Buat `frontend/src/components/ui/Button.tsx`:
+
+```tsx
+import React from 'react';
+import { clsx } from 'clsx';
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary';
+  size?: 'sm' | 'md' | 'lg';
+  children: React.ReactNode;
+}
+
+const Button: React.FC<ButtonProps> = ({
+  variant = 'primary',
+  size = 'md',
+  children,
+  className,
+  disabled,
+  ...props
+}) => {
+  const baseClasses = 'font-semibold rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed';
+  
+  const variantClasses = {
+    primary: 'bg-primary hover:bg-primary-600 text-white',
+    secondary: 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-slate-50',
+  };
+  
+  const sizeClasses = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-5 py-2.5 text-base',
+    lg: 'px-6 py-3 text-lg',
+  };
+
+  return (
+    <button
+      className={clsx(baseClasses, variantClasses[variant], sizeClasses[size], className)}
+      disabled={disabled}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+
+export default Button;
+```
+
+**Kenapa `clsx`?**
+
+```tsx
+// ❌ String concatenation (ugly)
+className={`base ${variant === 'primary' ? 'bg-primary' : 'bg-secondary'} ${disabled ? 'opacity-50' : ''}`}
+
+// ✅ clsx (clean)
+className={clsx('base', {
+  'bg-primary': variant === 'primary',
+  'bg-secondary': variant === 'secondary',
+  'opacity-50': disabled
+})}
+```
+
 ### Loader Component
 
-Buat `src/components/ui/Loader.tsx`:
+Buat `frontend/src/components/ui/Loader.tsx`:
 
-```typescript
+```tsx
 import React from 'react';
 
 const Loader: React.FC = () => {
   return (
-    <div className="flex items-center justify-center p-8">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    <div className="flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
     </div>
   );
 };
@@ -260,41 +329,395 @@ const Loader: React.FC = () => {
 export default Loader;
 ```
 
-## Penjelasan Komponen
+### LoadingState Component
 
-### 1. Button Component
+Buat `frontend/src/components/ui/LoadingState.tsx`:
 
-- **Props Extends HTMLButtonElement**: Kita bisa pakai semua props HTML button (`onClick`, `disabled`, dll)
-- **Variant & Size**: Bisa customize tampilan button
-- **twMerge & clsx**: Combine className dengan smart (no duplicates)
+```tsx
+import React from 'react';
+import Card from './Card';
+import Loader from './Loader';
 
-### 2. Card Component
+const LoadingState: React.FC = () => {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <Card className="p-8 text-center max-w-md">
+        <Loader />
+        <p className="mt-4 text-lg font-semibold">Membuat Kuis Untukmu...</p>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          AI sedang menganalisis materi dan membuat pertanyaan yang relevan. Mohon tunggu sebentar...
+        </p>
+      </Card>
+    </div>
+  );
+};
 
-- **Dark Mode Ready**: Pake `dark:` prefix dari Tailwind
-- **Flexible**: Bisa override className dari parent
+export default LoadingState;
+```
 
-### 3. Loader Component
+## Main App Component Structure
 
-- **Simple Spinner**: Pakai Tailwind animation
-- **Warna Primary**: Sesuai brand Dicoding
+File `App.tsx` kita lumayan besar (468 lines), jadi kita breakdown jadi sections:
 
-## Main App Structure
+### 1. Imports & Types
 
-Buat `src/App.tsx`:
+```tsx
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQuizStore } from './store/useQuizStore';
+import useQuizData from './hooks/useQuizData';
+import { Question, Option } from './types';
+import { clsx } from 'clsx';
+import { CheckCircle2, XCircle, Lightbulb } from 'lucide-react';
+import Card from './components/ui/Card';
+import Button from './components/ui/Button';
+import Loader from './components/ui/Loader';
+import LoadingState from './components/ui/LoadingState';
+```
 
-```typescript
-import React, { useState } from 'react';
+### 2. Progress Bar Component
 
+```tsx
+const ProgressBar: React.FC<{ value: number; max: number }> = ({ value, max }) => {
+    const percentage = max > 0 ? (value / max) * 100 : 0;
+    return (
+      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+        <div
+          className="bg-primary dark:bg-primary-400 h-2 rounded-full transition-all duration-500"
+          style={{ width: `${percentage}%` }}
+        ></div>
+      </div>
+    );
+};
+```
+
+### 3. QuizContainer (Apply User Preferences)
+
+```tsx
+const QuizContainer: React.FC<QuizContainerProps> = ({ preferences, children, isEmbedded = false }) => {
+  // Apply dark mode
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (preferences.theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [preferences.theme]);
+  
+  // Build container classes based on preferences
+  const containerClasses: string[] = [
+    'text-slate-900 dark:text-slate-50 transition-colors duration-300',
+    isEmbedded ? 'min-h-full p-3 sm:p-4' : 'min-h-screen p-4 sm:p-6 lg:p-8'
+  ];
+  
+  // Apply font size
+  if (preferences.fontSize === 'small') containerClasses.push('text-sm');
+  else if (preferences.fontSize === 'large') containerClasses.push('text-lg');
+  else containerClasses.push('text-base');
+
+  // Apply font style
+  if (preferences.fontStyle === 'serif') containerClasses.push('font-serif');
+  else if (preferences.fontStyle === 'mono') containerClasses.push('font-mono');
+  
+  const contentWidthClass = preferences.layoutWidth === 'fullWidth' ? 'max-w-full' : 'max-w-4xl';
+
+  return (
+    <div className={containerClasses.join(' ')}>
+      <div className={`mx-auto ${contentWidthClass}`}>
+        {children}
+      </div>
+    </div>
+  );
+};
+```
+
+**User Preferences Explained**:
+
+1. **Theme (dark/light)**: Toggle `dark` class di `<html>`
+2. **Font Size**: Apply `text-sm`, `text-base`, atau `text-lg`
+3. **Font Style**: Apply `font-serif`, `font-mono`, atau default
+4. **Layout Width**: `max-w-4xl` (standard) atau `max-w-full` (full width)
+
+### 4. Intro Screen
+
+```tsx
+const Intro: React.FC<IntroProps> = ({ onStart, isLoading = false }) => (
+    <div className="flex items-center justify-center min-h-screen">
+        <Card className="p-8 max-w-lg text-center">
+            <h1 className="text-3xl font-bold mb-2">Siap Uji Pemahamanmu?</h1>
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
+                Setelah membaca materi, yuk cek seberapa jauh kamu sudah paham. 
+                Kuis singkat ini dibuat oleh AI khusus untukmu berdasarkan materi yang baru saja kamu pelajari.
+            </p>
+            <div className="flex justify-center">
+                <Button onClick={onStart} size="lg" disabled={isLoading}>
+                    {isLoading ? (
+                        <div className="flex items-center gap-2">
+                            <Loader />
+                            <span>Memuat...</span>
+                        </div>
+                    ) : 'Mulai Cek Pemahaman!'}
+                </Button>
+            </div>
+        </Card>
+    </div>
+);
+```
+
+### 5. Question Component (The Heart!)
+
+Ini component paling complex. Handle:
+- Display question & options
+- Answer selection
+- Submit answer
+- Show correct/incorrect feedback
+- Display explanation & hint
+
+```tsx
+const QuestionComponent: React.FC<QuestionProps> = ({ question }) => {
+  const { 
+    selectedAnswers, 
+    selectAnswer,
+    submittedAnswers,
+    submitAnswer,
+    nextQuestion,
+    questions,
+    currentQuestionIndex
+  } = useQuizStore();
+
+  const selectedOptionId = selectedAnswers[question.id];
+  const isSubmitted = submittedAnswers[question.id];
+  const isAnswerSelected = selectedAnswers.hasOwnProperty(question.id);
+  const isCorrect = isSubmitted && selectedOptionId === question.correctOptionId;
+
+  // Split explanation and hint
+  const explanationParts = question.explanation.split('Hint:');
+  const mainExplanation = explanationParts[0].trim();
+  const hintText = explanationParts.length > 1 ? explanationParts[1].trim() : null;
+  
+  // Random feedback prefix
+  const feedbackPrefix = useMemo(() => {
+    if (!isSubmitted) return '';
+    const correctPrefixes = [
+      "Mantap, jawabanmu benar! ",
+      "Tepat sekali! ",
+      "Keren, kamu paham konsepnya! "
+    ];
+    const incorrectPrefixes = [
+      "Hampir benar! Coba kita lihat lagi yuk. ",
+      "Belum tepat, tapi jangan khawatir, ini bagian dari belajar. "
+    ];
+    const prefixes = isCorrect ? correctPrefixes : incorrectPrefixes;
+    return prefixes[Math.floor(Math.random() * prefixes.length)];
+  }, [isSubmitted, isCorrect]);
+
+  return (
+    <Card className="overflow-hidden">
+      {/* Feedback Header (after submit) */}
+      {isSubmitted && (
+        <div className={clsx('p-4 sm:p-5 border-b-2', {
+          'bg-red-50 dark:bg-red-900/30 border-red-500': !isCorrect,
+          'bg-green-50 dark:bg-green-900/30 border-green-500': isCorrect,
+        })}>
+          <h3 className={clsx('font-bold text-lg flex items-center gap-2', {
+            'text-red-700 dark:text-red-300': !isCorrect,
+            'text-green-700 dark:text-green-300': isCorrect,
+          })}>
+            {!isCorrect ? <XCircle size={22} /> : <CheckCircle2 size={22} />}
+            <span>{!isCorrect ? 'Salah' : 'Benar'}</span>
+          </h3>
+        </div>
+      )}
+      
+      {/* Question & Options */}
+      <div className="p-4 sm:p-6">
+        <p className="text-xl md:text-2xl font-bold mb-6">{question.questionText}</p>
+        <div className="space-y-4">
+          {question.options.map((option) => (
+            <div
+              key={option.id}
+              className={/* dynamic classes based on selected/correct */}
+              onClick={() => selectAnswer(question.id, option.id)}
+            >
+              <span>{option.text}</span>
+              {/* Show checkmark/x icon after submit */}
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Explanation (after submit) */}
+      {isSubmitted && (
+        <div className="p-4 sm:p-6 bg-slate-50 dark:bg-slate-900/50">
+           <h4 className="font-bold mb-2">Penjelasan</h4>
+           <p>{feedbackPrefix + mainExplanation}</p>
+           
+           {/* Hint Section */}
+           {hintText && (
+             <div className="mt-4 p-3 bg-primary-50 dark:bg-primary-900/40 rounded-lg flex">
+                <Lightbulb className="h-5 w-5 text-primary-500 mr-3" />
+                <div>
+                  <h5 className="font-semibold text-sm">Hint</h5>
+                  <p className="text-sm">{hintText}</p>
+                </div>
+             </div>
+           )}
+        </div>
+      )}
+
+      {/* Action Button */}
+      <div className="p-4 sm:p-6 flex justify-end">
+        <Button onClick={handleButtonClick} disabled={!isAnswerSelected}>
+          {isSubmitted
+            ? (currentQuestionIndex === questions.length - 1 ? 'Lihat Hasil' : 'Soal Berikutnya')
+            : 'Kirim Jawaban'}
+        </Button>
+      </div>
+    </Card>
+  );
+};
+```
+
+### 6. Quiz Component (Orchestrator)
+
+```tsx
+const Quiz: React.FC<QuizProps> = ({ onTryAgain, onGoToIntro }) => {
+  const { questions, currentQuestionIndex, quizOver } = useQuizStore();
+  const finishQuiz = useQuizStore(state => state.finishQuiz);
+  const [timeLeft, setTimeLeft] = useState(5 * 60); // 5 minutes
+
+  // Timer countdown
+  useEffect(() => {
+    if (quizOver || timeLeft <= 0) {
+      if (timeLeft <= 0) finishQuiz();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [timeLeft, quizOver, finishQuiz]);
+
+  if (quizOver) {
+    return <Results onTryAgain={onTryAgain} onGoToIntro={onGoToIntro} />;
+  }
+
+  const currentQuestion = questions[currentQuestionIndex];
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = timeLeft % 60;
+  const formattedTime = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const isTimeCritical = timeLeft <= 60;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm">
+          Pertanyaan {currentQuestionIndex + 1} dari {questions.length}
+        </span>
+        <span className={clsx('text-sm font-mono', {
+          'text-red-600 font-bold': isTimeCritical,
+        })}>
+          {formattedTime}
+        </span>
+      </div>
+      <ProgressBar value={currentQuestionIndex + 1} max={questions.length} />
+      <QuestionComponent question={currentQuestion} />
+    </div>
+  );
+};
+```
+
+### 7. Results Component
+
+```tsx
+const Results: React.FC<ResultsProps> = ({ onTryAgain, onGoToIntro }) => {
+  const { questions, selectedAnswers } = useQuizStore();
+
+  const score = useMemo(() => questions.reduce((acc, question) => {
+    return selectedAnswers[question.id] === question.correctOptionId ? acc + 1 : acc;
+  }, 0), [questions, selectedAnswers]);
+
+  const percentage = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
+
+  // Dynamic message based on score
+  const { title, subtitle } = useMemo(() => {
+    if (percentage === 100) return {
+      title: "Luar Biasa! Pemahaman Sempurna!",
+      subtitle: "Kamu benar-benar menguasai materi ini."
+    };
+    if (percentage >= 80) return {
+      title: "Kerja Bagus! Kamu di Jalur yang Tepat!",
+      subtitle: "Pemahamanmu sudah sangat solid."
+    };
+    // ... more cases
+  }, [percentage]);
+
+  return (
+    <div className="space-y-8 flex flex-col items-center">
+      <Card className="p-6 text-center w-full max-w-lg">
+        <h1 className="text-3xl font-bold mb-2">{title}</h1>
+        <p className="text-slate-600 mb-4">{subtitle}</p>
+        <p className="text-6xl font-bold my-4">{percentage}%</p>
+        <p>Kamu menjawab {score} dari {questions.length} soal dengan benar.</p>
+      </Card>
+      
+      <div className="flex items-center gap-4">
+        <Button onClick={onGoToIntro} variant="secondary">Kembali ke Awal</Button>
+        <Button onClick={onTryAgain}>Coba Lagi</Button>
+      </div>
+    </div>
+  );
+};
+```
+
+### 8. Main App Component
+
+```tsx
 const App: React.FC = () => {
   // Get URL parameters
   const urlParams = new URLSearchParams(window.location.search);
-  const tutorialId = urlParams.get('tutorial_id') || urlParams.get('tutorial');
-  const userId = urlParams.get('user_id') || urlParams.get('user');
+  const tutorialId = urlParams.get('tutorial_id');
+  const userId = urlParams.get('user_id');
   
-  // State
   const [quizStarted, setQuizStarted] = useState(false);
+  const { userPreferences, assessmentData, isGeneratingQuiz, error, generateQuiz } = useQuizData(tutorialId, userId);
+  
+  const initialize = useQuizStore(state => state.initialize);
+  const setQuestions = useQuizStore(state => state.setQuestions);
+  const reset = useQuizStore(state => state.reset);
 
-  // Check if embedded in iframe
+  // Initialize Zustand with userId and tutorialId
+  useEffect(() => {
+    if (userId && tutorialId) {
+      initialize(userId, tutorialId);
+    }
+  }, [userId, tutorialId, initialize]);
+
+  // Load questions when data arrives
+  useEffect(() => {
+    if (assessmentData?.assessment?.questions) {
+      setQuestions(assessmentData.assessment.questions);
+    }
+  }, [assessmentData?.assessment, setQuestions]);
+
+  const handleStartQuiz = async () => {
+    if (isGeneratingQuiz || quizStarted) return;
+    reset();
+    setQuizStarted(true);
+    await generateQuiz(); // Generate quiz
+  };
+
+  const handleTryAgain = async () => {
+    reset();
+    setQuizStarted(false);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    setQuizStarted(true);
+    await generateQuiz(true); // Retry with fresh=true
+  };
+
+  // Detect iframe embed
   const isEmbedded = useMemo(() => {
     try {
       return window.self !== window.top;
@@ -303,12 +726,44 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const renderContent = () => {
+    // Missing params error
+    if (!tutorialId || !userId) {
+      return <div className="text-red-500 p-4">Parameter tidak lengkap</div>;
+    }
+
+    // Intro screen
+    if (!quizStarted) {
+      return <Intro onStart={handleStartQuiz} isLoading={isGeneratingQuiz} />;
+    }
+    
+    // Loading state while generating
+    if (quizStarted && isGeneratingQuiz) {
+      return <LoadingState />;
+    }
+    
+    // Error state
+    if (error) {
+      return <div className="text-red-500">Error: {error}</div>;
+    }
+    
+    // Quiz ready!
+    if (assessmentData?.assessment) {
+      return <Quiz onTryAgain={handleTryAgain} onGoToIntro={() => setQuizStarted(false)} />;
+    }
+  };
+  
   return (
     <main className="bg-slate-50 dark:bg-slate-900 min-h-screen">
-      <div className="max-w-4xl mx-auto p-4">
-        <h1>LearnCheck!</h1>
-        {/* Content will go here */}
-      </div>
+      {userPreferences ? (
+        <QuizContainer preferences={userPreferences} isEmbedded={isEmbedded}>
+          {renderContent()}
+        </QuizContainer>
+      ) : (
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader />
+        </div>
+      )}
     </main>
   );
 };
@@ -316,57 +771,59 @@ const App: React.FC = () => {
 export default App;
 ```
 
-## URL Parameters
-
-Kita support 2 format parameter:
-1. `?tutorial_id=123&user_id=456` (format lengkap)
-2. `?tutorial=123&user=456` (format pendek)
-
-Ini biar flexible kalau Dicoding mau pake format yang mana aja.
-
-## Iframe Detection
-
-```typescript
-window.self !== window.top
-```
-
-Ini cara detect apakah app kita jalan di dalam iframe atau standalone. Berguna untuk:
-- Adjust layout (no padding berlebih di iframe)
-- Security (validate message dari parent window)
-
-## Dark Mode Support
-
-```typescript
-<div className="bg-slate-50 dark:bg-slate-900">
-```
-
-Tailwind otomatis handle dark mode kalau parent punya class `dark`. Nanti kita akan sync ini dengan preference user dari Dicoding.
-
-## Testing
-
-Jalankan development server:
+## Test Frontend
 
 ```bash
+cd frontend
 npm run dev
 ```
 
-Buka browser: `http://localhost:5173?tutorial_id=123&user_id=456`
+Open browser: `http://localhost:5173/?tutorial_id=35363&user_id=1`
 
-Kamu harus lihat halaman kosong tapi sudah terstruktur!
+Expected flow:
+1. Loading spinner (fetch preferences) ~0.5s
+2. Intro screen with "Mulai Cek Pemahaman!" button
+3. Click button → Loading state "Membuat Kuis Untukmu..." ~15s
+4. Quiz appears dengan 3 questions
+5. Answer questions, see feedback
+6. Results screen dengan score
+
+## Common Issues
+
+### Issue 1: Custom colors tidak work
+
+**Cause**: Tailwind CDN masih ada di `index.html`
+
+**Solution**: Remove CDN, ensure `index.css` imported di `main.tsx`
+
+### Issue 2: Dark mode tidak work
+
+**Cause**: Missing `dark` class di HTML
+
+**Solution**: Check `QuizContainer` apply dark class dengan benar
+
+### Issue 3: Icons tidak muncul
+
+**Cause**: `lucide-react` not installed
+
+**Solution**: 
+```bash
+npm install lucide-react
+```
 
 ## Kesimpulan
 
-Kita sudah punya:
-- ✅ Struktur folder yang terorganisir
-- ✅ TypeScript interfaces untuk type safety
-- ✅ API client dengan axios
-- ✅ UI components (Button, Card, Loader)
-- ✅ Dark mode support
-- ✅ URL parameter parsing
-- ✅ Iframe detection
-
-Di tutorial berikutnya, kita akan buat state management dengan Zustand!
+Frontend kita sekarang punya:
+- ✅ Tailwind build system (custom colors work!)
+- ✅ User preference support (theme, font, layout)
+- ✅ Interactive quiz dengan feedback
+- ✅ Timer countdown (5 minutes)
+- ✅ Results screen dengan dynamic messages
+- ✅ Reusable UI components
+- ✅ Type-safe dengan TypeScript
 
 ## Next Steps
+
+Frontend UI udah jadi! Sekarang kita implement **state management** dengan Zustand untuk persist quiz progress.
 
 Lanjut ke [State Management dengan Zustand](./05-state.md) →

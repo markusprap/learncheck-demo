@@ -2,43 +2,57 @@
 sidebar_position: 7
 ---
 
-# Deploy ke Vercel
+# Deployment ke Vercel
 
-Saatnya deploy aplikasi kita ke production! Vercel adalah platform terbaik untuk deploy React + Node.js monorepo.
+Di tutorial terakhir ini, kita deploy aplikasi LearnCheck! ke Vercel production dengan proper configuration untuk monorepo dan serverless functions.
 
 ## Kenapa Vercel?
 
-- **Zero Configuration**: Deploy dengan 1 command
-- **Automatic HTTPS**: SSL certificate gratis
-- **Global CDN**: Cepat dari mana aja
-- **Serverless Functions**: Auto-scaling, no server management
-- **Preview Deployments**: Setiap commit = preview URL
-- **Free Tier**: Cukup untuk project hobby
+### vs Heroku / Railway
+| Feature | Vercel | Heroku/Railway |
+|---------|--------|----------------|
+| **Serverless** | Yes (automatic scaling) | No (always-on dyno) |
+| **Cold Start** | ~200ms | N/A |
+| **Free Tier** | 100GB bandwidth | Limited hours |
+| **Auto Deploy** | Git push | Manual or CI/CD |
+| **Static + API** | Native support | Separate configs |
+
+### vs Netlify
+| Feature | Vercel | Netlify |
+|---------|--------|---------|
+| **Next.js** | Optimized (same company) | Basic support |
+| **Serverless Functions** | Unlimited (free tier) | 125k requests/month |
+| **Build Time** | Fast (incremental) | Standard |
+
+**TL;DR**: Vercel = Best for React + API monorepo deployment
 
 ## Prerequisites
 
-1. **GitHub Account**: Push code ke GitHub
-2. **Vercel Account**: Sign up di [vercel.com](https://vercel.com)
-3. **Environment Variables Ready**:
-   - GEMINI_API_KEY
+1. **GitHub Account** - Repository untuk auto-deploy
+2. **Vercel Account** - Sign up di [vercel.com](https://vercel.com)
+3. **Gemini API Key** - Dari [ai.google.dev](https://ai.google.dev)
 
-## Step 1: Push ke GitHub
+## Project Structure Review
 
-```bash
-# Initialize git (kalau belum)
-git init
-git add .
-git commit -m "Initial commit: LearnCheck! application"
-
-# Create repo di GitHub, lalu:
-git remote add origin https://github.com/USERNAME/learncheck-demo.git
-git branch -M main
-git push -u origin main
+```
+learncheck-demo/
+├── backend/
+│   ├── src/
+│   │   ├── index.ts      ← Vercel serverless entry point
+│   │   ├── server.ts     ← Local dev entry point
+│   │   └── ...
+│   ├── package.json
+│   └── tsconfig.json
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── vite.config.ts
+└── vercel.json           ← Deployment config (CRITICAL!)
 ```
 
-## Step 2: Vercel Configuration
+## Vercel Configuration (vercel.json)
 
-Buat `vercel.json` di **root folder** project:
+File ini sudah dibuat di Tutorial 01. Mari kita breakdown:
 
 ```json
 {
@@ -48,7 +62,7 @@ Buat `vercel.json` di **root folder** project:
       "src": "backend/src/index.ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["backend/src/**"]
+        "includeFiles": ["backend/**"]
       }
     },
     {
@@ -59,433 +73,678 @@ Buat `vercel.json` di **root folder** project:
       }
     }
   ],
-  "rewrites": [
+  "routes": [
+    { "handle": "filesystem" },
     {
-      "source": "/api/(.*)",
-      "destination": "/backend/src/index.ts"
+      "src": "/api/(.*)",
+      "dest": "/backend/src/index.ts"
     },
     {
-      "source": "/(.*)",
-      "destination": "/frontend/$1"
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
     }
   ]
 }
 ```
 
-## Penjelasan Vercel Config
-
-### Builds
+### Section 1: builds
 
 ```json
-{
-  "src": "backend/src/index.ts",
-  "use": "@vercel/node"
-}
+"builds": [
+  {
+    "src": "backend/src/index.ts",
+    "use": "@vercel/node",
+    "config": {
+      "includeFiles": ["backend/**"]
+    }
+  }
+]
 ```
 
-Ini tell Vercel: "backend/src/index.ts adalah serverless function Node.js"
+**Explanation**:
+- `src`: Entry point for backend (MUST be `index.ts`, NOT `server.ts`!)
+- `use`: Vercel builder for Node.js projects
+- `includeFiles`: Include all files in `backend/` folder (dependencies, config, etc.)
+
+**Why `index.ts` not `server.ts`?**
+
+```typescript
+// ❌ server.ts - Has app.listen()
+app.listen(4000, () => {
+  console.log('Server running');
+});
+// Vercel doesn't like this! Serverless can't "listen"
+
+// ✅ index.ts - Exports app only
+export default app;
+// Vercel wraps this in its own serverless handler
+```
+
+### Section 2: Frontend Build
 
 ```json
 {
   "src": "frontend/package.json",
-  "use": "@vercel/static-build"
+  "use": "@vercel/static-build",
+  "config": {
+    "distDir": "dist"
+  }
 }
 ```
 
-Ini tell Vercel: "frontend adalah React app, build dengan `npm run build`"
+**Explanation**:
+- Vercel runs `npm run build` in `frontend/` folder
+- Build output goes to `frontend/dist/`
+- Static files served dari CDN (super fast!)
 
-### Rewrites
+### Section 3: routes
 
 ```json
-{
-  "source": "/api/(.*)",
-  "destination": "/backend/src/index.ts"
-}
+"routes": [
+  { "handle": "filesystem" },    // 1. Check static files first
+  {
+    "src": "/api/(.*)",           // 2. Route /api/* to backend
+    "dest": "/backend/src/index.ts"
+  },
+  {
+    "src": "/(.*)",               // 3. All else to frontend
+    "dest": "/frontend/$1"
+  }
+]
 ```
 
-Request ke `/api/*` → backend serverless function
+**Request Flow**:
 
-```json
-{
-  "source": "/(.*)",
-  "destination": "/frontend/$1"
-}
+```
+User Request: https://learncheck.vercel.app/api/v1/assessment
+    ↓
+Check static files? No
+    ↓
+Matches /api/(.*)? Yes!
+    ↓
+Route to backend/src/index.ts (serverless function)
+    ↓
+Express handles /api/v1/assessment
+    ↓
+Return JSON response
+
+---
+
+User Request: https://learncheck.vercel.app/
+    ↓
+Check static files? No
+    ↓
+Matches /api/(.*)? No
+    ↓
+Matches /(.*)? Yes!
+    ↓
+Serve frontend/dist/index.html
+    ↓
+React SPA loads
 ```
 
-Request lainnya → frontend static files
+## Frontend Build Configuration
 
-## Step 3: Update Backend for Serverless
-
-Vercel serverless function **tidak pakai `app.listen()`**. Update `backend/src/index.ts`:
-
-```typescript
-import express from 'express';
-import cors from 'cors';
-import routes from './routes';
-
-const app = express();
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// Routes
-app.use('/api/v1', routes);
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// IMPORTANT: Export app, don't call listen()
-export default app;
-
-// Only listen in development
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 4000;
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
-}
-```
-
-### Kenapa Export Default?
-
-Vercel expects serverless function export default Express app. Vercel yang handle listen() di production.
-
-## Step 4: Update Frontend Build
-
-Add build script di `frontend/package.json`:
+Pastikan `frontend/package.json` punya build script:
 
 ```json
 {
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build",  // ← Vercel runs this
     "preview": "vite preview"
   }
 }
 ```
 
-Vercel akan jalanin `npm run build` otomatis.
+**Build Process**:
+1. `tsc`: Compile TypeScript (type checking)
+2. `vite build`: Bundle dan minify
+3. Output: `frontend/dist/` folder
 
-## Step 5: Connect Vercel ke GitHub
+## Backend Build Configuration
 
-1. Login ke [vercel.com](https://vercel.com)
-2. Klik "Add New Project"
-3. Import GitHub repository
-4. Vercel detect monorepo automatically!
-5. Klik "Deploy"
-
-## Step 6: Set Environment Variables
-
-Di Vercel dashboard:
-
-1. Go to Project Settings
-2. Klik "Environment Variables"
-3. Add variable:
-
-```
-GEMINI_API_KEY = AIzaSyXXXXXXXXXXXXXXXXX
-```
-
-4. Select scope: **Production**, **Preview**, **Development**
-5. Save
-
-## Step 7: Redeploy
-
-Setelah add env variable, trigger redeploy:
-
-```bash
-# Push any change
-git commit --allow-empty -m "Trigger redeploy"
-git push
-```
-
-Atau di Vercel dashboard: **Deployments** → **Redeploy**
-
-## Step 8: Test Production
-
-URL production: `https://your-project.vercel.app`
-
-Test dengan parameter:
-```
-https://your-project.vercel.app?tutorial_id=35363&user_id=1
-```
-
-Kalau berhasil, kamu akan lihat aplikasi working!
-
-## Step 9: Custom Domain (Optional)
-
-Punya domain sendiri? Connect ke Vercel:
-
-1. Go to Project Settings → Domains
-2. Add domain (example: `learncheck.yourdomain.com`)
-3. Update DNS records (Vercel kasih instruksi)
-4. Wait for SSL certificate (auto, gratis!)
-
-## Embed di Dicoding Classroom
-
-Setelah deploy, kamu bisa embed di Dicoding:
-
-```html
-<iframe 
-  src="https://your-project.vercel.app?tutorial_id=35363&user_id=1"
-  width="100%"
-  height="800px"
-  frameborder="0"
-></iframe>
-```
-
-Aplikasi kamu sudah support:
-- ✅ Iframe detection
-- ✅ PostMessage communication
-- ✅ Real-time preference sync
-- ✅ Dark mode dari parent
-
-## Monitoring
-
-### 1. Vercel Analytics
-
-Enable di Project Settings → Analytics (gratis!)
-
-Track:
-- Page views
-- Web Vitals (performance)
-- Top pages
-- Audience location
-
-### 2. Function Logs
-
-View logs di Vercel dashboard:
-
-1. Go to **Deployments**
-2. Click latest deployment
-3. Click **Function Logs**
-
-Semua `console.log()` muncul di sini!
-
-### 3. Real-time Logs (CLI)
-
-```bash
-npm install -g vercel
-vercel login
-vercel logs your-project.vercel.app --follow
-```
-
-Stream logs real-time di terminal!
-
-## Performance Optimization
-
-### 1. Enable Edge Network
-
-Vercel auto-deploy ke global CDN. Static files (frontend) served dari edge location terdekat user.
-
-```
-User di Jakarta → Singapore edge ⚡
-User di US → US edge ⚡
-```
-
-### 2. Serverless Function Regions
-
-Backend functions default deploy ke US. Untuk Indonesia, request region:
-
-Contact Vercel support untuk regional functions (Pro plan).
-
-### 3. Image Optimization
-
-Kalau pakai image, leverage Vercel Image Optimization:
-
-```typescript
-import Image from 'next/image'; // Next.js only
-
-// Or use regular img with CDN
-<img src="https://your-cdn.com/image.jpg" />
-```
-
-## Troubleshooting
-
-### Build Failed
-
-Check build logs:
-1. Go to Deployments
-2. Click failed deployment
-3. Read build logs
-
-Common issues:
-- **TypeScript errors**: Fix locally first, push
-- **Missing dependencies**: Check package.json
-- **Wrong Node version**: Add `engines` in package.json
+`backend/package.json`:
 
 ```json
 {
-  "engines": {
-    "node": "18.x"
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",                    // ← Vercel runs this
+    "start": "node dist/index.js"
+  },
+  "main": "dist/index.js"
+}
+```
+
+**Important**: Vercel automatically runs `npm run build` untuk backend juga!
+
+## Step-by-Step Deployment
+
+### Step 1: Push to GitHub
+
+```bash
+cd learncheck-demo
+
+# Initialize git (if not yet)
+git init
+
+# Add all files
+git add .
+
+# Commit
+git commit -m "chore: Initial commit - LearnCheck! app"
+
+# Create GitHub repo (via GitHub UI or gh CLI)
+# Then push:
+git remote add origin https://github.com/YOUR_USERNAME/learncheck-demo.git
+git branch -M main
+git push -u origin main
+```
+
+### Step 2: Import Project di Vercel
+
+1. Go to [vercel.com/new](https://vercel.com/new)
+2. Click **"Import Git Repository"**
+3. Select your GitHub repo: `learncheck-demo`
+4. Vercel auto-detects monorepo structure!
+
+### Step 3: Configure Build Settings
+
+Vercel should auto-detect dari `vercel.json`, tapi verify:
+
+**Framework Preset**: Other (monorepo)
+**Root Directory**: `./` (root folder)
+**Build Command**: (auto-detected dari vercel.json)
+**Output Directory**: (auto-detected)
+
+### Step 4: Add Environment Variables
+
+**CRITICAL**: Add `GEMINI_API_KEY` di Vercel dashboard!
+
+1. Project Settings → Environment Variables
+2. Add variable:
+   - **Key**: `GEMINI_API_KEY`
+   - **Value**: `AIzaSyXXXXXXXXXXXXXXXXXXXXXXX` (your actual key)
+   - **Environments**: Production, Preview, Development (check all)
+
+3. Click **"Save"**
+
+### Step 5: Deploy!
+
+Click **"Deploy"** button.
+
+Expected process:
+```
+[1/4] Building backend...
+  Running "npm install"
+  Running "npm run build"
+  ✓ Backend built successfully
+
+[2/4] Building frontend...
+  Running "npm install"
+  Running "npm run build"
+  ✓ Frontend built successfully
+
+[3/4] Deploying serverless functions...
+  ✓ /api/* → backend/src/index.ts
+
+[4/4] Deploying static assets...
+  ✓ Frontend deployed to CDN
+
+✅ Deployment successful!
+🚀 https://learncheck-demo.vercel.app
+```
+
+### Step 6: Test Production
+
+Open browser: `https://YOUR-PROJECT.vercel.app/?tutorial_id=35363&user_id=1`
+
+Expected:
+1. Loading preferences (~0.5s)
+2. Intro screen
+3. Click "Mulai" → Loading quiz (~15s)
+4. Quiz appears
+5. Complete quiz → Results
+
+**Check Logs**: Vercel Dashboard → Deployments → [Your Deployment] → Function Logs
+
+## Auto-Deploy Setup
+
+**BONUS**: Vercel auto-deploys on every git push!
+
+```bash
+# Make a change
+echo "// Test deploy" >> frontend/src/App.tsx
+
+# Commit and push
+git add .
+git commit -m "test: Trigger auto-deploy"
+git push origin main
+```
+
+Vercel automatically:
+1. Detects git push
+2. Starts new build
+3. Deploys to Preview URL
+4. After verification, promotes to Production
+
+## Environment Variables Management
+
+### Production vs Preview
+
+- **Production**: `https://learncheck-demo.vercel.app`
+- **Preview**: `https://learncheck-demo-git-feature-branch.vercel.app`
+
+Set different API keys kalau butuh:
+```
+GEMINI_API_KEY (Production): AIzaSy_PROD_KEY
+GEMINI_API_KEY (Preview): AIzaSy_DEV_KEY
+```
+
+### Accessing in Code
+
+Backend (`process.env`):
+```typescript
+const apiKey = process.env.GEMINI_API_KEY;
+```
+
+Frontend (TIDAK BISA ACCESS!):
+```typescript
+// ❌ WRONG - Frontend can't access backend env vars
+const apiKey = process.env.GEMINI_API_KEY; // undefined
+```
+
+**Security**: Backend env vars TIDAK exposed ke frontend bundle.
+
+## Custom Domain (Optional)
+
+### Step 1: Add Domain di Vercel
+
+Project Settings → Domains → Add Domain
+
+Example: `learncheck.dicoding.com`
+
+### Step 2: Configure DNS
+
+Di Dicoding DNS settings, add CNAME record:
+```
+Type: CNAME
+Name: learncheck
+Value: cname.vercel-dns.com
+```
+
+### Step 3: Verify
+
+Vercel auto-verifies DNS and provisions SSL certificate.
+
+After ~5 minutes: `https://learncheck.dicoding.com` LIVE! 🎉
+
+## Monitoring & Debugging
+
+### Function Logs
+
+Vercel Dashboard → Deployments → [Deployment] → Functions
+
+Check logs untuk backend errors:
+```
+[Gemini] SDK initialized successfully
+[Assessment] Generating quiz for tutorial 35363
+[Gemini] Generating fresh quiz...
+```
+
+### Performance Analytics
+
+Vercel Dashboard → Analytics
+
+Check:
+- **Response Times**: Should be < 1s (excluding Gemini AI)
+- **Error Rate**: Should be < 1%
+- **Bandwidth**: Monitor usage (free tier: 100GB/month)
+
+### Real-time Logs (CLI)
+
+Install Vercel CLI:
+```bash
+npm install -g vercel
+```
+
+Login and link project:
+```bash
+vercel login
+vercel link
+```
+
+Stream logs:
+```bash
+vercel logs --follow
+```
+
+See live requests di terminal! Helpful untuk debugging.
+
+## Common Deployment Issues
+
+### Issue 1: "Module not found" Error
+
+**Cause**: Missing dependency in `package.json`
+
+**Solution**:
+```bash
+# Backend
+cd backend
+npm install missing-package --save
+
+# Frontend
+cd frontend
+npm install missing-package --save
+
+# Commit and push
+git add package.json package-lock.json
+git commit -m "fix: Add missing dependency"
+git push
+```
+
+### Issue 2: "GEMINI_API_KEY not found"
+
+**Cause**: Environment variable not set
+
+**Solution**: 
+1. Vercel Dashboard → Project Settings → Environment Variables
+2. Add `GEMINI_API_KEY`
+3. Redeploy (Vercel Dashboard → Deployments → [...] → Redeploy)
+
+### Issue 3: 404 on /api routes
+
+**Cause**: `vercel.json` routing misconfigured
+
+**Debug**: Check logs di Vercel Dashboard
+
+**Solution**: Ensure `routes` section correct:
+```json
+{
+  "src": "/api/(.*)",
+  "dest": "/backend/src/index.ts"  // ← Must point to index.ts
+}
+```
+
+### Issue 4: Frontend loads, API fails
+
+**Cause**: Backend build failed
+
+**Debug**: Check build logs di Vercel Dashboard
+
+Common causes:
+- TypeScript errors
+- Missing dependencies
+- Wrong Node version
+
+**Solution**: Fix errors locally first:
+```bash
+cd backend
+npm run build  # Should succeed without errors
+```
+
+### Issue 5: Slow API responses
+
+**Cause**: Cold start (serverless function idle)
+
+**Expected**: First request after idle ~500ms-1s slower
+
+**Not an issue**: Subsequent requests fast (<200ms)
+
+**If persist**: Check Gemini AI latency (should be ~12-15s)
+
+## Performance Optimization
+
+### 1. Edge Caching (Static Assets)
+
+Frontend static files auto-cached di Vercel CDN:
+- HTML: `Cache-Control: public, max-age=0, must-revalidate`
+- JS/CSS: `Cache-Control: public, max-age=31536000, immutable`
+
+**Result**: Lightning-fast load times globally! ⚡
+
+### 2. Function Regions
+
+Default: Serverless functions deploy ke all regions.
+
+Optimize untuk specific region:
+```json
+// vercel.json
+{
+  "functions": {
+    "backend/src/index.ts": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "regions": ["sin1"]  // Singapore (closest to Indonesia)
+    }
   }
 }
 ```
 
-### Function Timeout
+### 3. Gemini API Optimization
 
-Vercel free tier: **10 second timeout**
+Already optimized:
+- Model: `gemini-2.5-flash` (fast variant)
+- Parallel data fetching: `Promise.all()`
+- HTML parser: Remove unnecessary tags
 
-Gemini API bisa 15-20 detik! Solusi:
-- ✅ Use cache (1.3s after first)
-- ✅ Upgrade to Pro ($20/month = 60s timeout)
-- ❌ Don't use free tier for production
+Can't optimize further without degrading quality.
 
-### Environment Variables Not Working
+## Cost Estimation (Free Tier)
 
-Check:
-1. Scope correct? (Production/Preview/Development)
-2. Redeploy after adding variables
-3. No typos in variable names
+Vercel Free Tier:
+- **Bandwidth**: 100GB/month
+- **Function Executions**: Unlimited
+- **Build Minutes**: 6000 minutes/month
 
-Test via health endpoint:
+**Our App Usage**:
+- Quiz load: ~30KB (HTML + JS + API)
+- 100GB ÷ 30KB = ~3.3 million quiz loads/month
 
-```typescript
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    hasGemini: !!process.env.GEMINI_API_KEY,
-  });
-});
+**Conclusion**: Free tier sufficient untuk development + moderate production! 🎉
+
+## Production Checklist
+
+Before launching:
+
+- [ ] All environment variables set (GEMINI_API_KEY)
+- [ ] Build succeeds locally (`npm run build` in both folders)
+- [ ] TypeScript no errors (`tsc` passes)
+- [ ] Test production URL manually
+- [ ] Check Function Logs (no errors)
+- [ ] Test di Dicoding Classroom iframe
+- [ ] Verify preferences sync works
+- [ ] Test quiz flow end-to-end
+- [ ] Check mobile responsive
+- [ ] Test dark/light theme toggle
+- [ ] Verify timer countdown works
+- [ ] Test "Try Again" functionality
+
+## Rollback Strategy
+
+### If deployment fails:
+
+1. **Vercel Dashboard** → Deployments
+2. Find previous working deployment
+3. Click **"..."** → **"Promote to Production"**
+4. Previous version instantly live! (no rebuild)
+
+### Rollback via CLI:
+
+```bash
+vercel rollback [deployment-url]
 ```
 
-Visit: `https://your-project.vercel.app/api/health`
+**Zero downtime**: Vercel switches traffic instantly.
 
-### CORS Errors
+## Continuous Deployment Workflow
 
-Update backend CORS config:
+Best practice workflow:
 
+```bash
+# Feature branch
+git checkout -b feature/new-quiz-type
+
+# Make changes
+# ... code ...
+
+# Test locally
+npm run build  # Both frontend & backend
+npm run dev    # Verify works
+
+# Commit and push
+git add .
+git commit -m "feat: Add new quiz type"
+git push origin feature/new-quiz-type
+```
+
+**Vercel automatically**:
+1. Creates Preview deployment: `https://learncheck-demo-git-feature-new-quiz-type.vercel.app`
+2. Posts comment di GitHub PR dengan preview URL
+3. Team can test before merge
+
+**After PR approved**:
+```bash
+git checkout main
+git merge feature/new-quiz-type
+git push origin main
+```
+
+**Vercel automatically** promotes Preview → Production! 🚀
+
+## Monitoring Best Practices
+
+### 1. Setup Vercel Notifications
+
+Project Settings → Notifications
+
+Enable:
+- ✅ Deployment Failed
+- ✅ Deployment Ready
+- ✅ Domain Configuration
+
+Get Slack/Email notifications untuk deployment events.
+
+### 2. Function Error Tracking
+
+Install Sentry (optional):
+```bash
+npm install @sentry/node
+```
+
+```typescript
+// backend/src/app.ts
+import * as Sentry from '@sentry/node';
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({ dsn: process.env.SENTRY_DSN });
+}
+```
+
+Track errors di production dengan detailed stack traces.
+
+### 3. Custom Analytics
+
+Add Vercel Analytics (optional):
+```bash
+cd frontend
+npm install @vercel/analytics
+```
+
+```typescript
+// frontend/src/main.tsx
+import { Analytics } from '@vercel/analytics/react';
+
+root.render(
+  <>
+    <App />
+    <Analytics />
+  </>
+);
+```
+
+Track page views, user interactions, Web Vitals.
+
+## Security Best Practices
+
+### 1. API Rate Limiting
+
+Add rate limiting untuk prevent abuse:
+
+```typescript
+// backend/src/middleware/rateLimiter.ts
+import rateLimit from 'express-rate-limit';
+
+export const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests, please try again later.'
+});
+
+// backend/src/app.ts
+import { apiLimiter } from './middleware/rateLimiter';
+
+app.use('/api/', apiLimiter);
+```
+
+### 2. CORS Configuration
+
+Currently allow all origins:
+```typescript
+app.use(cors()); // ❌ Allow all
+```
+
+Lock down untuk production:
 ```typescript
 app.use(cors({
   origin: [
-    'http://localhost:5173',
-    'https://your-project.vercel.app',
     'https://dicoding.com',
+    'https://learncheck.vercel.app'
   ],
-  credentials: true,
-}));
+  credentials: true
+})); // ✅ Whitelist only
 ```
 
-## CI/CD Pipeline
+### 3. Environment Variables Security
 
-Setiap push ke GitHub → auto deploy!
-
-```
-git push → GitHub → Vercel detects → Build → Deploy → Live! 🚀
-```
-
-Want staging environment?
-
-1. Create `staging` branch
-2. Vercel auto-create preview deployment
-3. Test di preview URL
-4. Merge ke `main` for production
-
-## Cost Estimation
-
-### Free Tier (Hobby):
-- 100 GB bandwidth/month
-- 100 hours serverless execution/month
-- 6,000 build minutes/month
-- **Cost: $0** ✅
-
-Perfect untuk portfolio & small projects!
-
-### Pro Tier ($20/month):
-- 1 TB bandwidth
-- 1,000 hours execution
-- 24,000 build minutes
-- Analytics
-- Team collaboration
-
-### Enterprise:
-- Custom pricing
-- SLA guarantee
-- Dedicated support
-
-## Best Practices
-
-### 1. Use Environment Stages
-
-```
-Production: main branch
-Staging: staging branch  
-Development: local machine
-```
-
-### 2. Enable Preview Deployments
-
-Every PR gets unique URL:
-```
-https://learncheck-pr-42.vercel.app
-```
-
-Perfect untuk review sebelum merge!
-
-### 3. Monitor Performance
-
-Check Vercel Analytics weekly:
-- Slow functions? Optimize!
-- High bandwidth? Optimize images!
-- Many errors? Check logs!
-
-### 4. Automate with GitHub Actions
-
-`.github/workflows/test.yml`:
-
-```yaml
-name: Test
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - run: npm install
-      - run: npm test
-```
-
-Run tests before deploy!
+- ✅ NEVER commit `.env` to git
+- ✅ Use different keys untuk dev/prod
+- ✅ Rotate keys regularly (every 3 months)
+- ✅ Verify keys scoped properly (Gemini API key should have minimal permissions)
 
 ## Kesimpulan
 
-Deployment checklist:
-- ✅ Push code ke GitHub
-- ✅ Configure vercel.json
-- ✅ Update backend for serverless
-- ✅ Connect Vercel to GitHub
-- ✅ Set environment variables
-- ✅ Test production URL
-- ✅ Enable monitoring
+Deployment setup kita sekarang punya:
+- ✅ Monorepo dengan separate backend/frontend builds
+- ✅ Serverless backend (auto-scaling)
+- ✅ CDN-cached frontend (global fast load)
+- ✅ Auto-deploy on git push
+- ✅ Preview deployments untuk testing
+- ✅ Zero-downtime rollbacks
+- ✅ Environment variable management
+- ✅ Production monitoring & logs
 
-Aplikasi LearnCheck! sekarang:
-- Live di internet ✅
-- Auto-scaling ✅
-- Global CDN ✅
-- HTTPS secure ✅
-- Ready untuk embed di Dicoding ✅
+**Production URL**: `https://YOUR-PROJECT.vercel.app`
 
-**SELAMAT! Kamu sudah berhasil membangun aplikasi AI-powered quiz generator dari 0 sampai production!** 🎉
+**Test URL**: `https://YOUR-PROJECT.vercel.app/?tutorial_id=35363&user_id=1`
 
-## What's Next?
+## 🎉 Project Complete!
 
-Ideas untuk pengembangan:
-1. **Analytics**: Track completion rate, average score
-2. **Leaderboard**: Competitive learning
-3. **Multiple Languages**: Support English
-4. **Difficulty Levels**: Easy, Medium, Hard questions
-5. **Question Pool**: Generate 9 questions, show random 3
-6. **Certificate**: Generate certificate kalau perfect score
+Selamat! Kamu udah berhasil build dan deploy **LearnCheck!** - AI-powered quiz generator yang:
 
-Keep learning, keep building! 🚀
+1. ✅ Generate pertanyaan dari tutorial content dengan Gemini AI
+2. ✅ Support user preferences (theme, font, layout)
+3. ✅ Real-time updates tanpa polling
+4. ✅ Persist quiz progress per user per tutorial
+5. ✅ Deploy ke production dengan Vercel
+6. ✅ Auto-scaling serverless architecture
 
----
+**Next Challenges**:
+- Add question difficulty levels
+- Implement quiz analytics dashboard
+- Add leaderboard system
+- Support multiple question types (essay, true/false)
+- Integrate dengan Dicoding's actual API
 
-## Butuh Bantuan?
-
-- GitHub Issues: [github.com/markusprap/learncheck-demo/issues](https://github.com/markusprap/learncheck-demo/issues)
-- Vercel Docs: [vercel.com/docs](https://vercel.com/docs)
-- Dicoding Discord: [dicoding.com/discord](https://dicoding.com)
+Happy coding! 🚀

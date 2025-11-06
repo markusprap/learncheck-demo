@@ -13,89 +13,122 @@ Di tutorial ini, kita akan membangun REST API menggunakan Express.js untuk serve
 - **Mature**: Library terpercaya, banyak dipakai production
 - **Middleware Ecosystem**: CORS, body-parser, dll tinggal plug-and-play
 
+## Architecture Pattern: Dua Entry Points
+
+**CRITICAL CONCEPT**: Backend kita punya 2 entry points berbeda:
+
+1. **`server.ts`**: Untuk local development (dengan `app.listen()`)
+2. **`index.ts`**: Untuk Vercel serverless (export app, NO listen)
+
+### Kenapa Butuh 2 Entry Points?
+
+```typescript
+// ❌ SALAH - Jangan listen di serverless!
+// backend/src/index.ts (Vercel)
+app.listen(4000); // Error! Vercel sudah handle ini
+
+// ✅ BENAR - Export app aja
+export default app;
+```
+
+Vercel serverless function **TIDAK** boleh `app.listen()`. Vercel sudah handle port management sendiri.
+
 ## Setup Express App
+
+**CRITICAL**: dotenv HARUS di-load PERTAMA kali sebelum import apapun!
 
 Buat file `backend/src/app.ts`:
 
 ```typescript
-import express from 'express';
+// Load environment variables FIRST (before any imports)
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
-import routes from './routes';
+import mainRouter from './routes';
 import { errorHandler } from './utils/errorHandler';
 
-const app = express();
+const app: Express = express();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/v1', routes);
+// Main Router
+app.use('/api/v1', mainRouter);
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.0'
-  });
+app.get('/', (req: Request, res: Response) => {
+  res.status(200).send('LearnCheck! Backend is healthy.');
 });
 
-// Error handler (must be last!)
+// Error Handler
 app.use(errorHandler);
 
 export default app;
 ```
 
-### Penjelasan:
+### Kenapa dotenv di app.ts?
 
-**CORS**: Izinkan frontend (port 5173) akses backend (port 4000)
-```typescript
-app.use(cors());
+Karena `gemini.service.ts` butuh `process.env.GEMINI_API_KEY` saat module loading. Jika dotenv di `server.ts`, API key belum loaded saat gemini service di-import!
+
+**Module Loading Order**:
+```
+server.ts imports app.ts
+  → app.ts loads dotenv FIRST ✅
+  → app.ts imports routes
+    → routes imports controllers
+      → controllers imports services
+        → gemini.service reads process.env.GEMINI_API_KEY ✅
 ```
 
-**Body Parser**: Parse JSON request body
-```typescript
-app.use(express.json());
-```
+## Entry Point: Local Development
 
-**Routes**: Semua API route di `/api/v1/*`
-```typescript
-app.use('/api/v1', routes);
-```
-
-**Error Handler**: Catch semua error, return JSON response
-
-## Entry Point
-
-Buat `backend/src/index.ts`:
+Buat `backend/src/server.ts`:
 
 ```typescript
-import dotenv from 'dotenv';
 import app from './app';
+import dotenv from 'dotenv';
 
-// Load environment variables
+// Load environment variables for local development
 dotenv.config();
 
 const PORT = process.env.PORT || 4000;
 
-// Only listen in development (Vercel handles this in production)
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📖 Health check: http://localhost:${PORT}/health`);
-  });
-}
+app.listen(PORT, () => {
+  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+  console.log(`📡 API endpoint: http://localhost:${PORT}/api/v1`);
+});
+```
 
-// Export for Vercel serverless
+**Untuk development**: `npm run dev` → runs `server.ts` → calls `app.listen()`
+
+## Entry Point: Vercel Serverless
+
+Buat `backend/src/index.ts`:
+
+```typescript
+
+import app from './app';
+
+// Tidak perlu dotenv.config() karena Vercel menangani environment variables.
+// Tidak perlu app.listen() karena Vercel akan menangani servernya.
+
 export default app;
 ```
 
-## Constants & Types
+**Untuk production**: Vercel imports `index.ts` → exports Express app → Vercel wraps it as serverless function
+
+## Constants & Configuration
 
 Buat `backend/src/config/constants.ts`:
 
 ```typescript
+/**
+ * Application-wide constants
+ */
+
 export const API_CONFIG = {
   DICODING_BASE_URL: 'https://learncheck-dicoding-mock-666748076441.europe-west1.run.app/api',
   GEMINI_MODEL: 'gemini-2.5-flash',
@@ -116,14 +149,20 @@ export const HTTP_STATUS = {
 } as const;
 ```
 
+## TypeScript Types
+
 Buat `backend/src/types/index.ts`:
 
 ```typescript
+/**
+ * Shared type definitions for the backend
+ */
+
 export interface UserPreferences {
-  theme: 'light' | 'dark';
+  theme: 'dark' | 'light';
   fontSize: 'small' | 'medium' | 'large';
-  fontStyle: 'sans' | 'serif' | 'mono';
-  layoutWidth: 'standard' | 'fullWidth';
+  fontStyle: 'default' | 'serif' | 'mono';
+  layoutWidth: 'fullWidth' | 'standard';
 }
 
 export interface QuizOption {
@@ -133,7 +172,7 @@ export interface QuizOption {
 
 export interface QuizQuestion {
   id: string;
-  text: string;
+  questionText: string;
   options: QuizOption[];
   correctOptionId: string;
   explanation: string;
@@ -141,10 +180,12 @@ export interface QuizQuestion {
 
 export interface Assessment {
   questions: QuizQuestion[];
+  cachedAt?: string;
 }
 
 export interface AssessmentResponse {
   assessment: Assessment;
+  userPreferences: UserPreferences;
   fromCache: boolean;
 }
 
@@ -153,8 +194,8 @@ export interface PreferencesResponse {
 }
 
 export interface ErrorResponse {
+  error: string;
   message: string;
-  status: number;
 }
 ```
 
@@ -163,13 +204,14 @@ export interface ErrorResponse {
 Buat `backend/src/routes/index.ts`:
 
 ```typescript
+
 import { Router } from 'express';
-import assessmentRoutes from './assessment.routes';
+import assessmentRouter from './assessment.routes';
 
 const router = Router();
 
-// Mount routes
-router.use('/', assessmentRoutes);
+// Mount assessment routes (includes /preferences and /assessment)
+router.use('/', assessmentRouter);
 
 export default router;
 ```
@@ -177,85 +219,91 @@ export default router;
 Buat `backend/src/routes/assessment.routes.ts`:
 
 ```typescript
+
 import { Router } from 'express';
-import { getAssessment, getPreferences } from '../controllers/assessment.controller';
+import { getAssessment, getUserPrefs } from '../controllers/assessment.controller';
 
 const router = Router();
 
-// GET /api/v1/preferences?user_id=123
-router.get('/preferences', getPreferences);
+// GET /api/v1/preferences?user_id=xxx - Get user preferences only
+router.get('/preferences', getUserPrefs);
 
-// GET /api/v1/assessment?tutorial_id=123&user_id=456
+// GET /api/v1/assessment?tutorial_id=xxx&user_id=xxx - Generate assessment with AI
 router.get('/assessment', getAssessment);
 
 export default router;
 ```
 
-## Controllers
+## Controllers Layer
+
+Controller handle HTTP request/response, validasi input, call service layer.
 
 Buat `backend/src/controllers/assessment.controller.ts`:
 
 ```typescript
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { fetchAssessmentData, fetchUserPreferences } from '../services/assessment.service';
-import { HTTP_STATUS, ERROR_MESSAGES } from '../config/constants';
+import { ERROR_MESSAGES, HTTP_STATUS } from '../config/constants';
 
-export const getPreferences = async (req: Request, res: Response) => {
+/**
+ * Get user preferences endpoint
+ * @route GET /api/v1/preferences
+ * @query user_id - User identifier
+ */
+export const getUserPrefs = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.query.user_id as string;
+    const { user_id } = req.query;
 
-    if (!userId) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        message: ERROR_MESSAGES.MISSING_PARAMS,
+    if (!user_id || typeof user_id !== 'string') {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
+        error: ERROR_MESSAGES.INVALID_USER_ID 
       });
     }
 
-    const preferences = await fetchUserPreferences(userId);
-    
-    res.json({ userPreferences: preferences });
-  } catch (error: any) {
-    console.error('Preferences error:', error);
-    res.status(HTTP_STATUS.INTERNAL_ERROR).json({
-      message: error.message || 'Failed to fetch preferences',
-    });
+    const userPreferences = await fetchUserPreferences(user_id);
+    res.status(HTTP_STATUS.OK).json({ userPreferences });
+  } catch (error) {
+    next(error);
   }
 };
 
-export const getAssessment = async (req: Request, res: Response) => {
+/**
+ * Generate or fetch cached assessment endpoint
+ * @route GET /api/v1/assessment
+ * @query tutorial_id - Tutorial identifier
+ * @query user_id - User identifier
+ * @query fresh - Optional: 'true' to skip cache and generate new questions (for retries)
+ */
+export const getAssessment = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const tutorialId = req.query.tutorial_id as string;
-    const userId = req.query.user_id as string;
-    const fresh = req.query.fresh as string;
+    const { tutorial_id, user_id, fresh } = req.query;
 
-    if (!tutorialId || !userId) {
-      return res.status(HTTP_STATUS.BAD_REQUEST).json({
-        message: ERROR_MESSAGES.MISSING_PARAMS,
+    if (!tutorial_id || typeof tutorial_id !== 'string') {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
+        error: ERROR_MESSAGES.INVALID_TUTORIAL_ID 
       });
     }
 
+    if (!user_id || typeof user_id !== 'string') {
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ 
+        error: ERROR_MESSAGES.INVALID_USER_ID 
+      });
+    }
+
+    // Parse 'fresh' parameter (for retry attempts to get new questions)
     const skipCache = fresh === 'true';
-    const result = await fetchAssessmentData(tutorialId, userId, skipCache);
     
-    res.json(result);
-  } catch (error: any) {
-    console.error('Assessment error:', error);
-    
-    if (error.message.includes('Rate limit')) {
-      return res.status(HTTP_STATUS.TOO_MANY_REQUESTS).json({
-        message: error.message,
-      });
-    }
-    
-    res.status(HTTP_STATUS.INTERNAL_ERROR).json({
-      message: error.message || ERROR_MESSAGES.GENERATION_FAILED,
-    });
+    const data = await fetchAssessmentData(tutorial_id, user_id, skipCache);
+    res.status(HTTP_STATUS.OK).json(data);
+  } catch (error) {
+    next(error);
   }
 };
 ```
 
-## Services Layer
+## Services Layer: Business Logic
 
-Ini layer paling penting! Handle business logic.
+Services contain core business logic, external API calls, data processing.
 
 Buat `backend/src/services/assessment.service.ts`:
 
@@ -267,6 +315,11 @@ import type { AssessmentResponse, UserPreferences } from '../types';
 
 /**
  * Fetch or generate assessment data for a tutorial
+ * @param tutorialId - Tutorial identifier
+ * @param userId - User identifier
+ * @param skipCache - If true, bypass cache and generate fresh quiz (parameter kept for API compatibility)
+ * @returns Assessment with user preferences
+ * @throws Error if generation fails
  */
 export const fetchAssessmentData = async (
   tutorialId: string,
@@ -297,12 +350,32 @@ export const fetchAssessmentData = async (
 
 /**
  * Fetch fresh user preferences (not cached for real-time updates)
+ * @param userId - User identifier
+ * @returns User preferences object
  */
 export const fetchUserPreferences = async (userId: string): Promise<UserPreferences> => {
   console.log(`[Preferences] Fetching fresh preferences for user ${userId}`);
   return await getUserPreferences(userId);
 };
 ```
+
+### Kenapa Promise.all()?
+
+```typescript
+// ❌ Sequential (slow ~3s)
+const tutorialHtml = await getTutorialContent(tutorialId); // 1.5s
+const userPreferences = await getUserPreferences(userId);  // 1.5s
+// Total: 3s
+
+// ✅ Parallel (fast ~1.5s)
+const [tutorialHtml, userPreferences] = await Promise.all([
+  getTutorialContent(tutorialId),  // 1.5s |
+  getUserPreferences(userId),       // 1.5s | concurrent
+]);
+// Total: 1.5s (fastest of the two)
+```
+
+## Dicoding Service: External API Client
 
 Buat `backend/src/services/dicoding.service.ts`:
 
@@ -366,279 +439,37 @@ export const getUserPreferences = async (userId: string): Promise<any> => {
 };
 ```
 
-## Controllers Layer
-
-Buat `backend/src/controllers/assessment.controller.ts`:
-
-```typescript
-import type { Request, Response } from 'express';
-import { fetchAssessmentData, fetchUserPreferences } from '../services/assessment.service';
-import { ERROR_MESSAGES, HTTP_STATUS } from '../config/constants';
-
-/**
- * GET /api/v1/assessment
- * Generate or retrieve quiz for a tutorial
- */
-export const getAssessment = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { tutorial_id, user_id, fresh } = req.query;
-
-    if (!tutorial_id || !user_id) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        error: ERROR_MESSAGES.INVALID_TUTORIAL_ID,
-      });
-      return;
-    }
-
-    const skipCache = fresh === 'true';
-    const data = await fetchAssessmentData(
-      tutorial_id as string,
-      user_id as string,
-      skipCache
-    );
-
-    res.status(HTTP_STATUS.OK).json(data);
-  } catch (error: any) {
-    console.error('[Controller] Error in getAssessment:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      error: error.message || 'Failed to generate assessment',
-    });
-  }
-};
-
-/**
- * GET /api/v1/preferences
- * Fetch user preferences from Dicoding
- */
-export const getPreferences = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { user_id } = req.query;
-
-    if (!user_id) {
-      res.status(HTTP_STATUS.BAD_REQUEST).json({
-        error: ERROR_MESSAGES.INVALID_USER_ID,
-      });
-      return;
-    }
-
-    const userPreferences = await fetchUserPreferences(user_id as string);
-
-    res.status(HTTP_STATUS.OK).json({ userPreferences });
-  } catch (error: any) {
-    console.error('[Controller] Error in getPreferences:', error);
-    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-      error: error.message || 'Failed to fetch preferences',
-    });
-  }
-};
-```
-
-## Routes Layer
-
-Buat `backend/src/routes/assessment.routes.ts`:
-
-```typescript
-import { Router } from 'express';
-import { getAssessment, getPreferences } from '../controllers/assessment.controller';
-
-const router = Router();
-
-router.get('/assessment', getAssessment);
-router.get('/preferences', getPreferences);
-
-export default router;
-```
-
-Buat `backend/src/routes/index.ts`:
-
-```typescript
-import { Router } from 'express';
-import assessmentRoutes from './assessment.routes';
-
-const router = Router();
-
-router.use('/', assessmentRoutes);
-
-export default router;
-```
-
-## Utils Layer
+## Utils: Helper Functions
 
 Buat `backend/src/utils/htmlParser.ts`:
 
 ```typescript
+
 import * as cheerio from 'cheerio';
 
-/**
- * Parse HTML content to clean text
- */
 export const parseHtmlContent = (html: string): string => {
   const $ = cheerio.load(html);
-  
-  // Remove script and style tags
-  $('script, style').remove();
-  
-  // Get text content
+  // Extract text from the body, which is a simplistic approach.
+  // A more robust solution might target specific elements.
   const text = $('body').text();
-  
   // Clean up whitespace
-  return text
-    .replace(/\s+/g, ' ')
-    .replace(/\n+/g, '\n')
-    .trim();
+  return text.replace(/\s\s+/g, ' ').trim();
 };
 ```
 
 Buat `backend/src/utils/errorHandler.ts`:
 
 ```typescript
-import type { Request, Response, NextFunction } from 'express';
 
-export const errorHandler = (
-  err: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  console.error('[Error]', err.message);
-  console.error('[Stack]', err.stack);
-
-  res.status(500).json({
-    error: err.message || 'Internal server error',
-  });
-};
-```
-
-## Test API
-
-Test dengan curl:
-
-```bash
-# Test assessment
-curl "http://localhost:4000/api/v1/assessment?tutorial_id=35363&user_id=1"
-
-# Test preferences
-curl "http://localhost:4000/api/v1/preferences?user_id=1"
-```
-
-Response assessment:
-
-```json
-{
-  "assessment": {
-    "questions": [
-      {
-        "id": "q1",
-        "questionText": "Apa itu React?",
-        "options": [...
-  }
-
-  // Generate questions with Gemini
-  const assessment = await generateAssessmentQuestions(textContent);
-
-  // Save to cache (unless skipCache=true)
-  if (!skipCache) {
-    await cacheQuizData(tutorialId, assessment);
-  }
-
-  return {
-    assessment,
-    fromCache: false,
-  };
-};
-```
-
-## Dicoding Service
-
-Buat `backend/src/services/dicoding.service.ts`:
-
-```typescript
-import axios from 'axios';
-import { API_CONFIG, ERROR_MESSAGES } from '../config/constants';
-import type { UserPreferences } from '../types';
-
-/**
- * Fetch user preferences from Dicoding Mock API
- */
-export const fetchUserPreferences = async (userId: string): Promise<UserPreferences> => {
-  const url = `${API_CONFIG.DICODING_BASE_URL}/users/${userId}/preferences`;
-  
-  try {
-    const response = await axios.get(url, {
-      timeout: API_CONFIG.REQUEST_TIMEOUT_MS,
-    });
-
-    if (!response.data?.preferences) {
-      throw new Error(ERROR_MESSAGES.USER_NOT_FOUND);
-    }
-
-    return response.data.preferences;
-  } catch (error: any) {
-    console.error('[Dicoding API] Error:', error.message);
-    throw new Error(`Failed to fetch user preferences: ${error.message}`);
-  }
-};
-```
-
-## HTML Parser Utility
-
-Buat `backend/src/utils/htmlParser.ts`:
-
-```typescript
-import * as cheerio from 'cheerio';
-
-/**
- * Parse HTML content and extract clean text
- * Removes HTML tags, scripts, styles, and extra whitespace
- */
-export const parseHTML = (htmlContent: string): string => {
-  const $ = cheerio.load(htmlContent);
-
-  // Remove script and style tags
-  $('script, style, noscript').remove();
-
-  // Get text content
-  let text = $('body').text();
-
-  // If no body tag, get all text
-  if (!text) {
-    text = $.text();
-  }
-
-  // Clean up whitespace
-  text = text
-    .replace(/\s+/g, ' ')  // Multiple spaces → single space
-    .replace(/\n+/g, '\n') // Multiple newlines → single newline
-    .trim();
-
-  return text;
-};
-```
-
-## Error Handler
-
-Buat `backend/src/utils/errorHandler.ts`:
-
-```typescript
 import { Request, Response, NextFunction } from 'express';
-import { HTTP_STATUS } from '../config/constants';
 
-export const errorHandler = (
-  err: Error,
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  console.error('[Error Handler]:', err);
-
-  res.status(HTTP_STATUS.INTERNAL_ERROR).json({
-    message: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
+export const errorHandler = (err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!', message: err.message });
 };
 ```
 
-## Test Backend
+## Test Backend Locally
 
 Jalankan server:
 
@@ -647,146 +478,182 @@ cd backend
 npm run dev
 ```
 
+Output yang diharapkan:
+```
+🚀 Backend server running on http://localhost:4000
+📡 API endpoint: http://localhost:4000/api/v1
+```
+
 Test endpoints dengan curl:
 
 ```bash
 # Health check
-curl http://localhost:4000/health
+curl http://localhost:4000/
 
 # Get preferences
 curl "http://localhost:4000/api/v1/preferences?user_id=1"
 
-# Get assessment (first time, will be slow ~16s)
-curl "http://localhost:4000/api/v1/assessment?tutorial_id=35363&user_id=1"
-
-# Get assessment (second time, should be fast ~1s from cache)
+# Get assessment (tunggu ~15-20 detik untuk Gemini generate)
 curl "http://localhost:4000/api/v1/assessment?tutorial_id=35363&user_id=1"
 ```
 
-## API Documentation
+## API Response Examples
 
-### GET /api/v1/preferences
+### GET /api/v1/preferences?user_id=1
 
-**Query Parameters:**
-- `user_id` (required): User ID
-
-**Response:**
+Response:
 ```json
 {
   "userPreferences": {
     "theme": "dark",
     "fontSize": "medium",
-    "fontStyle": "sans",
+    "fontStyle": "default",
     "layoutWidth": "standard"
   }
 }
 ```
 
-### GET /api/v1/assessment
+### GET /api/v1/assessment?tutorial_id=35363&user_id=1
 
-**Query Parameters:**
-- `tutorial_id` (required): Tutorial ID
-- `user_id` (required): User ID
-- `fresh` (optional): "true" to skip cache
-
-**Response:**
+Response:
 ```json
 {
   "assessment": {
     "questions": [
       {
         "id": "q1",
-        "text": "Apa itu React?",
+        "questionText": "Apa fungsi utama dari React Hooks?",
         "options": [
-          { "id": "a", "text": "Library JavaScript" },
-          { "id": "b", "text": "Framework PHP" }
+          { "id": "opt1", "text": "Mengelola state dan lifecycle" },
+          { "id": "opt2", "text": "Styling komponen" },
+          { "id": "opt3", "text": "Routing aplikasi" },
+          { "id": "opt4", "text": "Menangani HTTP requests" }
         ],
-        "correctOptionId": "a",
-        "explanation": "React adalah library JavaScript..."
+        "correctOptionId": "opt1",
+        "explanation": "React Hooks memungkinkan functional components menggunakan state dan lifecycle features. Hooks seperti useState dan useEffect menggantikan class components. Hint: Pelajari lagi materi tentang useState dan useEffect di React."
       }
     ]
   },
-  "fromCache": true
+  "userPreferences": {
+    "theme": "dark",
+    "fontSize": "medium",
+    "fontStyle": "default",
+    "layoutWidth": "standard"
+  },
+  "fromCache": false
 }
 ```
 
-## Struktur Lengkap
+## Architecture Summary
 
 ```
+Request Flow:
+Client → Express Router → Controller → Service → External API/Gemini
+                            ↓
+                        Validation
+                            ↓
+                        Response
+
+File Structure:
 backend/src/
+├── app.ts              # Express app setup (dotenv di sini!)
+├── server.ts           # Local dev entry point (dengan app.listen)
+├── index.ts            # Vercel serverless entry point (export app)
 ├── config/
-│   └── constants.ts          # Semua konstanta
+│   └── constants.ts    # Semua konstanta
 ├── types/
-│   └── index.ts              # TypeScript interfaces
+│   └── index.ts        # TypeScript interfaces
 ├── controllers/
-│   └── assessment.controller.ts  # Request handlers
+│   └── assessment.controller.ts  # HTTP handlers
 ├── routes/
-│   ├── index.ts              # Main router
-│   └── assessment.routes.ts  # Assessment routes
+│   ├── index.ts
+│   └── assessment.routes.ts
 ├── services/
-│   ├── assessment.service.ts # Business logic
-│   ├── dicoding.service.ts   # Dicoding API client
-│   └── gemini.service.ts     # Gemini AI client
-├── utils/
-│   ├── errorHandler.ts       # Error middleware
-│   └── htmlParser.ts         # HTML to text parser
-├── app.ts                    # Express app setup
-└── index.ts                  # Entry point
+│   ├── assessment.service.ts     # Business logic
+│   ├── dicoding.service.ts       # Dicoding API client
+│   └── gemini.service.ts         # Gemini AI client (next tutorial)
+└── utils/
+    ├── errorHandler.ts           # Error middleware
+    └── htmlParser.ts             # HTML parser
 ```
 
-## Best Practices
+## Best Practices Yang Diterapkan
 
-### 1. Separation of Concerns
-
-- **Controllers**: Handle HTTP request/response
-- **Services**: Business logic
-- **Utils**: Helper functions
-
-Jangan campur logic di controller!
-
-### 2. Error Handling
-
-Semua error di-throw, lalu caught di controller:
-
+### 1. **Environment Variable Loading Order**
 ```typescript
-try {
-  await someService();
-} catch (error) {
-  res.status(500).json({ message: error.message });
+// ✅ Load dotenv FIRST in app.ts
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express from 'express';
+// Now process.env is populated!
+```
+
+### 2. **Parallel Data Fetching**
+```typescript
+// ✅ Fetch in parallel untuk performance
+const [html, prefs] = await Promise.all([
+  getTutorialContent(tutorialId),
+  getUserPreferences(userId),
+]);
+```
+
+### 3. **Proper Error Handling**
+```typescript
+// ✅ Throw errors, let middleware handle
+if (!data) {
+  throw new Error('Data not found');
+}
+// Error caught by errorHandler middleware
+```
+
+### 4. **Type Safety**
+```typescript
+// ✅ Explicit return types
+export const fetchData = async (): Promise<Data> => {
+  // TypeScript ensures correct return type
 }
 ```
 
-### 3. Type Safety
+## Common Issues & Solutions
 
-Semua function punya return type:
+### Issue 1: "GEMINI_API_KEY is not defined"
 
+**Cause**: dotenv loaded setelah gemini.service di-import
+
+**Solution**: Move dotenv.config() ke TOP of app.ts (before ANY imports)
+
+### Issue 2: "Cannot GET /"
+
+**Cause**: Lupa export app di index.ts
+
+**Solution**: 
 ```typescript
-const fetchData = async (): Promise<Data> => {
-  // TypeScript knows return type!
-}
+// backend/src/index.ts
+export default app; // ✅
 ```
 
-### 4. Environment Variables
+### Issue 3: "Port already in use"
 
-Jangan hardcode sensitive data:
+**Cause**: Server masih running dari previous session
 
-```typescript
-const apiKey = process.env.GEMINI_API_KEY; // ✅
-const apiKey = "AIzaSy..."; // ❌ JANGAN!
+**Solution**:
+```bash
+lsof -ti:4000 | xargs kill -9
 ```
 
 ## Kesimpulan
 
 Backend kita sekarang punya:
-- ✅ Clean architecture (MVC pattern)
+- ✅ Clean architecture (Controller → Service → External API)
+- ✅ Dua entry points (dev vs serverless)
+- ✅ dotenv loading yang benar (di app.ts)
+- ✅ Parallel data fetching untuk performance
 - ✅ Type-safe dengan TypeScript
-- ✅ Error handling yang proper
-- ✅ API documentation
-- ✅ Simple & reliable (no external dependencies)
+- ✅ Proper error handling dengan middleware
 
-Di tutorial berikutnya, kita akan integrate Google Gemini AI!
+Di tutorial berikutnya, kita akan integrate Google Gemini AI untuk generate pertanyaan!
 
 ## Next Steps
 
 Lanjut ke [Integrasi Gemini AI](./03-gemini.md) →
-

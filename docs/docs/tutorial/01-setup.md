@@ -45,12 +45,14 @@ cd backend
 npm init -y
 ```
 
-Install dependencies:
+Install dependencies backend:
 
 ```bash
-npm install express cors dotenv axios cheerio @google/genai
+npm install express cors dotenv axios cheerio @google/genai@1.28.0
 npm install -D typescript @types/node @types/express @types/cors ts-node-dev
 ```
+
+**Penting**: Gunakan `@google/genai` versi 1.28.0 (BUKAN `@google/generative-ai`). Package ini adalah SDK resmi terbaru dari Google dengan API yang lebih modern.
 
 Buat `tsconfig.json`:
 
@@ -73,7 +75,7 @@ Buat `tsconfig.json`:
 }
 ```
 
-Buat struktur folder:
+Buat struktur folder backend:
 
 ```bash
 mkdir -p src/{config,types,controllers,routes,services,utils}
@@ -84,12 +86,14 @@ Tambahkan scripts di `package.json`:
 ```json
 {
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   }
 }
 ```
+
+**Catatan**: Script `dev` menggunakan `src/server.ts` (untuk local development dengan `app.listen()`), sedangkan build/start menggunakan `dist/index.js` (untuk Vercel serverless tanpa listen).
 
 ## Langkah 3: Setup Frontend
 
@@ -102,12 +106,18 @@ cd frontend
 npm install
 ```
 
-Install dependencies tambahan:
+Install dependencies frontend:
 
 ```bash
 npm install zustand axios lucide-react clsx tailwind-merge
 npm install -D tailwindcss postcss autoprefixer
 ```
+
+**Packages Explained**:
+- `zustand`: State management (lebih simple dari Redux)
+- `axios`: HTTP client untuk API calls
+- `lucide-react`: Icon library (CheckCircle, XCircle, Lightbulb)
+- `clsx` + `tailwind-merge`: Utility untuk dynamic className
 
 Initialize Tailwind CSS:
 
@@ -115,9 +125,12 @@ Initialize Tailwind CSS:
 npx tailwindcss init -p
 ```
 
+**CRITICAL**: Kita pakai Tailwind build system (BUKAN CDN). File `postcss.config.js` dan `tailwind.config.js` akan di-generate otomatis.
+
 Update `tailwind.config.js`:
 
 ```javascript
+/** @type {import('tailwindcss').Config} */
 export default {
   content: [
     "./index.html",
@@ -146,6 +159,16 @@ export default {
   plugins: [],
 }
 ```
+
+Buat file `src/index.css` untuk Tailwind directives:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+**Penting**: Jangan lupa import `index.css` di `main.tsx` nanti. Custom colors tidak akan work jika pakai Tailwind CDN!
 
 ## Langkah 4: Environment Variables
 
@@ -205,7 +228,7 @@ npm-debug.log*
 
 ## Langkah 6: Vercel Configuration
 
-Buat `vercel.json` di root:
+Buat `vercel.json` di root folder:
 
 ```json
 {
@@ -215,7 +238,7 @@ Buat `vercel.json` di root:
       "src": "backend/src/index.ts",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": ["backend/src/**"]
+        "includeFiles": ["backend/**"]
       }
     },
     {
@@ -226,18 +249,26 @@ Buat `vercel.json` di root:
       }
     }
   ],
-  "rewrites": [
+  "routes": [
+    { "handle": "filesystem" },
     {
-      "source": "/api/(.*)",
-      "destination": "/backend/src/index.ts"
+      "src": "/api/(.*)",
+      "dest": "/backend/src/index.ts"
     },
     {
-      "source": "/(.*)",
-      "destination": "/frontend/$1"
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
     }
   ]
 }
 ```
+
+**Penjelasan Config**:
+- `builds[0]`: Compile backend TypeScript ke serverless function
+- `builds[1]`: Build frontend React dengan Vite
+- `routes[0]`: Serve static files (frontend assets) terlebih dahulu
+- `routes[1]`: Route `/api/*` ke backend serverless function
+- `routes[2]`: Semua route lain serve frontend (SPA routing)
 
 ## Langkah 7: Test Setup
 
