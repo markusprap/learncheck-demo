@@ -134,7 +134,7 @@ const QuestionComponent: React.FC<QuestionProps> = ({ question }) => {
 
   const selectedOptionId = selectedAnswers[question.id];
   const isSubmitted = submittedAnswers[question.id];
-  const isAnswerSelected = selectedOptionId !== undefined && selectedOptionId !== null;
+  const isAnswerSelected = selectedAnswers.hasOwnProperty(question.id);
   const isCorrect = isSubmitted && selectedOptionId === question.correctOptionId;
 
   const handleButtonClick = () => {
@@ -194,7 +194,7 @@ const QuestionComponent: React.FC<QuestionProps> = ({ question }) => {
   const fullExplanation = feedbackPrefix + mainExplanation;
 
   return (
-    <Card className="overflow-visible">
+    <Card className="overflow-hidden">
       {isSubmitted && (
         <div className={clsx('p-4 sm:p-5 border-b-2', {
           'bg-red-50 dark:bg-red-900/30 border-red-500': !isCorrect,
@@ -245,12 +245,8 @@ const QuestionComponent: React.FC<QuestionProps> = ({ question }) => {
         </div>
       )}
 
-      {/* Footer with action button - Always render */}
       <div className="p-4 sm:p-6 border-t border-slate-200 dark:border-slate-800 flex justify-end bg-slate-50/50 dark:bg-slate-900/30">
-        <Button 
-          onClick={handleButtonClick} 
-          disabled={!isAnswerSelected && !isSubmitted}
-        >
+        <Button onClick={handleButtonClick} disabled={!isAnswerSelected}>
           {isSubmitted
             ? (currentQuestionIndex === questions.length - 1 ? 'Lihat Hasil' : 'Soal Berikutnya')
             : 'Kirim Jawaban'}
@@ -352,8 +348,6 @@ const App: React.FC = () => {
   const userId = urlParams.get('user_id') || urlParams.get('user');
   
   const [quizStarted, setQuizStarted] = useState(false);
-  const [isStarting, setIsStarting] = useState(false); // New state to prevent double-click
-  
   const { 
     userPreferences, 
     assessmentData, 
@@ -368,17 +362,15 @@ const App: React.FC = () => {
   const reset = useQuizStore(state => state.reset);
 
   const handleStartQuiz = async () => {
-    if (isGeneratingQuiz || isStarting) return; // Prevent multiple clicks
-    setIsStarting(true);
+    // FIX: Prevent double-click glitch
+    if (isGeneratingQuiz || quizStarted) return;
     setQuizStarted(true);
     await generateQuiz(); // First attempt: use cache if available
-    setIsStarting(false);
   };
 
   const handleTryAgain = async () => {
     reset();
     setQuizStarted(false);
-    setIsStarting(false);
     // Small delay for UI transition
     await new Promise(resolve => setTimeout(resolve, 100));
     setQuizStarted(true);
@@ -387,7 +379,6 @@ const App: React.FC = () => {
   
   const handleGoToIntro = () => {
     setQuizStarted(false);
-    setIsStarting(false);
     reset();
   };
 
@@ -433,9 +424,9 @@ const App: React.FC = () => {
     }
 
     if (!quizStarted) {
-        return <Intro onStart={handleStartQuiz} isLoading={isLoadingPreferences || isGeneratingQuiz || isStarting} />;
+        return <Intro onStart={handleStartQuiz} isLoading={isLoadingPreferences || isGeneratingQuiz} />;
     }
-    if (isGeneratingQuiz || isStarting) {
+    if (isGeneratingQuiz) {
       return <LoadingState />;
     }
     if (error && !assessmentData?.assessment) {
