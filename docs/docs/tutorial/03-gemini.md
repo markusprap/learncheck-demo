@@ -6,6 +6,36 @@ sidebar_position: 3
 
 Di tutorial ini, kita akan mengintegrasikan Google Gemini AI untuk generate pertanyaan kuis secara otomatis dari konten tutorial.
 
+## 🎯 What We're Building
+
+Service yang bisa:
+1. **Input**: Plain text dari tutorial (sudah di-parse dari HTML)
+2. **Process**: Kirim ke Gemini AI dengan prompt yang terstruktur
+3. **Output**: 3 pertanyaan multiple choice dalam Bahasa Indonesia (format JSON)
+
+## 🔗 Where It Fits in the Flow
+
+```
+assessment.service.ts
+    ↓
+1. Fetch tutorial HTML dari dicoding.service
+2. Parse HTML → plain text (htmlParser)
+3. Send text → gemini.service.ts ← WE ARE HERE!
+    ↓
+    Gemini AI generates 3 questions
+    ↓
+4. Return Assessment JSON
+    ↓
+5. Combine with user preferences
+    ↓
+6. Send to frontend
+```
+
+**Why in assessment.service flow?**
+- Gemini needs **clean text input** (not HTML)
+- Gemini generates **only questions** (not preferences)
+- Assessment service **orchestrates** all data sources
+
 ## Apa itu Gemini AI?
 
 **Gemini** adalah model AI terbaru dari Google yang bisa:
@@ -16,10 +46,38 @@ Di tutorial ini, kita akan mengintegrasikan Google Gemini AI untuk generate pert
 
 ## Kenapa Gemini?
 
+### 🤔 Why Not Just Write Questions Manually?
+
+**Problem**: Manual question creation doesn't scale
+```
+1 tutorial = 30 minutes to write 3 questions
+100 tutorials = 3,000 minutes = 50 hours!
+```
+
+**Solution**: AI generates questions instantly
+```
+1 tutorial = ~15 seconds with Gemini
+100 tutorials = 25 minutes total
+```
+
+### 🤔 Why Gemini Specifically?
+
+**Comparison with alternatives**:
+
+| Feature | Gemini 2.5 Flash | GPT-4 | Claude |
+|---------|------------------|-------|--------|
+| **Speed** | ~10-15s | ~20-30s | ~15-20s |
+| **Structured Output** | ✅ Native (Type enum) | ✅ (json_schema) | ✅ (tool use) |
+| **Indonesian Support** | ✅ Excellent | ✅ Good | ✅ Good |
+| **Free Tier** | ✅ 60 req/min | ❌ No free tier | ❌ No free tier |
+| **Cost (per 1M tokens)** | $0.075 | $10 | $3 |
+
+**Why we chose Gemini**:
 1. **Fast**: Response ~10-15 detik (lebih cepat dari GPT-4)
-2. **Structured Output**: Bisa generate JSON langsung dengan schema validation
+2. **Structured Output**: Bisa generate JSON langsung dengan schema validation (Type enum)
 3. **Affordable**: Free tier 60 requests/minute (cukup untuk development)
 4. **Multilingual**: Bagus untuk Bahasa Indonesia
+5. **Google AI Studio**: Easy testing interface sebelum coding
 
 ## Dapatkan API Key
 
@@ -68,6 +126,56 @@ npm install @google/genai@1.28.0
 ✅ **GUNAKAN**: `@google/genai` (package baru)
 
 ## Buat Gemini Service
+
+### 🤔 Why Separate Service File?
+
+**Problem**: Gemini logic scattered everywhere
+```typescript
+// ❌ BAD: Gemini code in controller
+app.get('/assessment', async (req, res) => {
+  const ai = new GoogleGenAI({apiKey: '...'});
+  const response = await ai.models.generateContent({...});
+  // ... lots of Gemini-specific code
+});
+
+// ❌ BAD: Gemini code in assessment.service
+export const fetchAssessmentData = async () => {
+  const ai = new GoogleGenAI({apiKey: '...'});
+  // ... mixing Gemini with business logic
+};
+```
+
+**Solution**: Dedicated gemini.service.ts
+```typescript
+// ✅ GOOD: Single responsibility
+// gemini.service.ts - ONLY Gemini AI concerns
+export const generateAssessmentQuestions = async (text: string) => {
+  // All Gemini logic here
+};
+
+// assessment.service.ts - Business logic
+export const fetchAssessmentData = async () => {
+  const text = parseHTML(html);
+  const questions = await generateAssessmentQuestions(text); // Clean!
+};
+```
+
+**Benefits**:
+- 🎯 **Single Responsibility**: File only cares about Gemini
+- 🔄 **Reusable**: Bisa generate questions untuk use case lain
+- 🧪 **Testable**: Easy to mock Gemini responses
+- 🔧 **Maintainable**: Ganti ke AI lain? Cuma edit 1 file
+
+### Service Structure
+
+```
+gemini.service.ts contains:
+├─ API key validation (module load time)
+├─ GoogleGenAI initialization
+├─ assessmentSchema definition (Type enum)
+├─ generateAssessmentQuestions() function
+└─ Error handling
+```
 
 Sekarang kita buat service untuk handle AI generation. Ini file paling penting di backend!
 

@@ -6,6 +6,123 @@ sidebar_position: 2
 
 Di tutorial ini, kita akan membangun REST API menggunakan Express.js untuk serve data kuis dan preferences user.
 
+## 🎯 Apa Yang Akan Kita Bangun?
+
+Backend API yang:
+1. **Fetch data tutorial** dari Dicoding Mock API
+2. **Fetch user preferences** (theme, font, layout)
+3. **Generate quiz questions** menggunakan Gemini AI
+4. **Return combined data** ke frontend dalam format JSON
+
+## 📊 Data Flow Overview
+
+Sebelum coding, pahami dulu alur datanya:
+
+```
+User buka quiz di browser
+        ↓
+Frontend hit: POST /api/v1/assessment/generate
+        ↓
+BACKEND CONTROLLER (assessment.controller.ts)
+- Validate request (userId, tutorialId)
+- Call service layer ↓
+        ↓
+BACKEND SERVICE (assessment.service.ts)
+- Parallel fetch: [Tutorial Content, User Preferences]
+        ↓
+DICODING SERVICE (dicoding.service.ts)
+├─→ GET /tutorials/{id} → HTML content
+└─→ GET /users/{id}/preferences → JSON preferences
+        ↓
+HTML PARSER (htmlParser.ts)
+- Clean HTML → Plain text
+        ↓
+GEMINI SERVICE (gemini.service.ts)
+- Send text → Gemini AI
+- Get back: 3 quiz questions (JSON)
+        ↓
+BACKEND SERVICE (combine data)
+- Merge: {questions, preferences, timestamp}
+        ↓
+BACKEND CONTROLLER (send response)
+- Return JSON to frontend
+        ↓
+Frontend display quiz
+```
+
+## 🏗️ Order of Creation (Urutan Buat File)
+
+**PENTING**: Urutan ini penting! Jangan random bikin file, karena ada dependency.
+
+### Step 1: Foundation (Config & Types)
+```
+1. backend/src/config/constants.ts      ← API URLs, model names
+2. backend/src/types/index.ts           ← TypeScript interfaces
+```
+**Why first?** File lain akan import constants dan types ini.
+
+### Step 2: Utilities (Helpers)
+```
+3. backend/src/utils/errorHandler.ts    ← Error middleware
+4. backend/src/utils/htmlParser.ts      ← HTML cleaner
+```
+**Why now?** Services butuh utils ini.
+
+### Step 3: External Services (API Clients)
+```
+5. backend/src/services/dicoding.service.ts  ← Fetch dari Dicoding
+6. backend/src/services/gemini.service.ts    ← Gemini AI integration
+```
+**Why now?** Assessment service akan pakai kedua service ini.
+
+### Step 4: Business Logic (Core Service)
+```
+7. backend/src/services/assessment.service.ts  ← Orchestration logic
+```
+**Why now?** Ini yang combine dicoding + gemini + htmlParser.
+
+### Step 5: HTTP Layer (Controllers & Routes)
+```
+8. backend/src/controllers/assessment.controller.ts  ← HTTP handlers
+9. backend/src/routes/assessment.routes.ts           ← Route definitions
+10. backend/src/routes/index.ts                      ← Main router
+```
+**Why now?** Controller pakai service, routes pakai controller.
+
+### Step 6: Express App Setup
+```
+11. backend/src/app.ts     ← Express app (dotenv + middleware + routes)
+12. backend/src/server.ts  ← Local dev entry point
+13. backend/src/index.ts   ← Vercel serverless entry point
+```
+**Why last?** App import semua routes, server/index import app.
+
+## 🔗 File Dependencies (Siapa Import Siapa)
+
+```
+app.ts
+ ├─ imports dotenv (FIRST!)
+ ├─ imports express
+ ├─ imports cors
+ ├─ imports routes/index.ts
+ │   └─ imports routes/assessment.routes.ts
+ │       └─ imports controllers/assessment.controller.ts
+ │           ├─ imports services/assessment.service.ts
+ │           │   ├─ imports services/dicoding.service.ts
+ │           │   │   └─ imports axios
+ │           │   ├─ imports services/gemini.service.ts
+ │           │   │   ├─ imports @google/genai
+ │           │   │   └─ imports types/index.ts
+ │           │   ├─ imports utils/htmlParser.ts
+ │           │   │   └─ imports cheerio
+ │           │   └─ imports types/index.ts
+ │           └─ imports config/constants.ts
+ └─ imports utils/errorHandler.ts
+
+server.ts → imports app.ts (+ calls app.listen)
+index.ts → imports app.ts (exports app, NO listen)
+```
+
 ## Kenapa Express?
 
 - **Minimalis**: Code simpel, tidak bloated
@@ -122,6 +239,31 @@ export default app;
 
 ## Constants & Configuration
 
+### 🤔 Why We Need This File?
+
+**Problem**: Magic strings dan numbers scattered di codebase
+```typescript
+// ❌ BAD: Magic strings everywhere
+fetch('https://learncheck-dicoding-mock-...'); // Line 45
+fetch('https://learncheck-dicoding-mock-...'); // Line 128 (typo!)
+model: 'gemini-2.5-flash' // Line 67
+model: 'gemini-2-flash'   // Line 201 (different version!)
+```
+
+**Solution**: Single source of truth
+```typescript
+// ✅ GOOD: One place to manage
+export const API_CONFIG = {
+  DICODING_BASE_URL: '...',  // Change once, affects everywhere
+  GEMINI_MODEL: 'gemini-2.5-flash',
+}
+```
+
+**Benefits**:
+- 🔄 Easy to update (change model version in 1 place)
+- 🐛 Less bugs (no typos in URLs)
+- 📖 Readable (named constants explain meaning)
+
 Buat `backend/src/config/constants.ts`:
 
 ```typescript
@@ -150,6 +292,30 @@ export const HTTP_STATUS = {
 ```
 
 ## TypeScript Types
+
+### 🤔 Why We Need This File?
+
+**Problem**: Tanpa types, bugs muncul di runtime
+```typescript
+// ❌ Without types
+const prefs = await getUserPrefs();
+console.log(prefs.theem); // Typo! Runtime error
+console.log(prefs.fontSize); // undefined, expected 'small' | 'medium' | 'large'
+```
+
+**Solution**: Type safety catches bugs at compile time
+```typescript
+// ✅ With types
+const prefs: UserPreferences = await getUserPrefs();
+console.log(prefs.theem); // ⚠️ TypeScript error: Property 'theem' does not exist
+console.log(prefs.theme);  // ✅ Autocomplete works!
+```
+
+**Benefits**:
+- 🐛 Catch typos before runtime
+- 🧠 Better IDE autocomplete
+- 📝 Self-documenting code
+- 🔄 Easier refactoring
 
 Buat `backend/src/types/index.ts`:
 
@@ -201,6 +367,35 @@ export interface ErrorResponse {
 
 ## Routing Structure
 
+### 🤔 Why We Need Routes?
+
+**Problem**: All endpoints in one big file = maintenance nightmare
+```typescript
+// ❌ BAD: Everything in app.ts
+app.get('/api/v1/assessment', handler1);
+app.get('/api/v1/preferences', handler2);
+app.post('/api/v1/users', handler3);
+app.put('/api/v1/users/:id', handler4);
+// ... 50 more routes
+```
+
+**Solution**: Modular routing by feature
+```typescript
+// ✅ GOOD: Organized by domain
+routes/
+  index.ts          ← Main router (mounts all sub-routers)
+  assessment.routes.ts  ← All assessment-related routes
+  users.routes.ts       ← All user-related routes (future)
+```
+
+**Benefits**:
+- 📁 Organized by feature/domain
+- 🔍 Easy to find routes
+- 👥 Multiple devs can work on different route files
+- 🧪 Easier to test individual route modules
+
+### File 1: Main Router
+
 Buat `backend/src/routes/index.ts`:
 
 ```typescript
@@ -215,6 +410,14 @@ router.use('/', assessmentRouter);
 
 export default router;
 ```
+
+### File 2: Assessment Routes
+
+**Why separate file?** All assessment-related endpoints in one place.
+
+**Route Design Decisions**:
+- `GET /preferences` - Simple, only fetch user settings
+- `GET /assessment` - Complex, fetch + generate + combine data
 
 Buat `backend/src/routes/assessment.routes.ts`:
 
@@ -235,6 +438,67 @@ export default router;
 ```
 
 ## Controllers Layer
+
+### 🤔 Why We Need Controllers?
+
+**Problem**: Mixing HTTP logic dengan business logic = messy code
+```typescript
+// ❌ BAD: Everything in route handler
+app.get('/assessment', async (req, res) => {
+  // HTTP validation
+  if (!req.query.user_id) return res.status(400).json({error: '...'});
+  
+  // Business logic
+  const html = await fetch('...');
+  const text = parseHTML(html);
+  const questions = await generateWithAI(text);
+  
+  // HTTP response
+  res.json({data: questions});
+});
+```
+
+**Solution**: Separate concerns dengan layers
+```typescript
+// ✅ GOOD: Clear separation
+// Route: Define URL pattern
+router.get('/assessment', getAssessment);
+
+// Controller: Handle HTTP (validate, call service, respond)
+export const getAssessment = async (req, res) => {
+  const {user_id} = req.query;
+  if (!user_id) return res.status(400).json({error: '...'});
+  
+  const data = await fetchAssessmentData(user_id); // Service
+  res.json(data);
+};
+
+// Service: Pure business logic
+export const fetchAssessmentData = async (userId) => {
+  // Focus on WHAT to do, not HTTP stuff
+};
+```
+
+**Benefits**:
+- 🎯 Controller = HTTP layer (request/response/validation)
+- 💼 Service = Business logic (reusable, testable)
+- 🧪 Easy to unit test services (no HTTP mocking needed)
+- 🔄 Services can be called from controllers, CLI, cron jobs, etc.
+
+### Controller Responsibilities
+
+✅ **Controller SHOULD**:
+- Validate request parameters
+- Extract data from `req.query`/`req.body`
+- Call service layer functions
+- Send HTTP responses (status codes + JSON)
+- Catch errors and pass to error middleware
+
+❌ **Controller SHOULD NOT**:
+- Make external API calls directly
+- Contain complex business logic
+- Parse HTML or process data
+- Know about Gemini API or database details
 
 Controller handle HTTP request/response, validasi input, call service layer.
 
@@ -302,6 +566,73 @@ export const getAssessment = async (req: Request, res: Response, next: NextFunct
 ```
 
 ## Services Layer: Business Logic
+
+### 🤔 Why We Need Service Layer?
+
+**Problem**: Semua logic di controller = tidak reusable
+```typescript
+// ❌ BAD: Logic stuck in HTTP context
+app.get('/assessment', async (req, res) => {
+  const html = await fetch('dicoding...');
+  const text = parseHTML(html);
+  const questions = await generateAI(text);
+  res.json(questions);
+});
+
+// Mau pakai logic yang sama di CLI script?
+// Mau pakai di cron job?
+// Mau unit test tanpa HTTP?
+// CANNOT! Logic tied to Express req/res
+```
+
+**Solution**: Extract pure business logic ke service
+```typescript
+// ✅ GOOD: Reusable, testable business logic
+// Service (pure function, no HTTP)
+export const fetchAssessmentData = async (userId, tutorialId) => {
+  const html = await fetch('dicoding...');
+  const text = parseHTML(html);
+  const questions = await generateAI(text);
+  return {questions, userId, tutorialId};
+};
+
+// Controller (thin wrapper)
+app.get('/assessment', async (req, res) => {
+  const data = await fetchAssessmentData(req.query.userId, req.query.tutorialId);
+  res.json(data);
+});
+
+// CLI script (reuse same logic!)
+const data = await fetchAssessmentData('user123', 'tutorial456');
+console.log(data);
+
+// Unit test (no HTTP mocking!)
+const result = await fetchAssessmentData('testUser', 'testTutorial');
+expect(result.questions).toHaveLength(3);
+```
+
+**Benefits**:
+- 🔄 **Reusable**: Can be called from controllers, CLI, cron jobs, tests
+- 🧪 **Testable**: Pure functions, easy to unit test
+- 🎯 **Single Responsibility**: Each service does ONE thing well
+- 🧩 **Composable**: Services can call other services
+
+### Service Architecture Pattern
+
+```
+assessment.service.ts (Orchestrator)
+    ↓
+Coordinates multiple services:
+    ├─→ dicoding.service.ts (External API client)
+    ├─→ gemini.service.ts (AI client)
+    └─→ htmlParser.ts (Data transformer)
+```
+
+**Why this pattern?**
+- `assessment.service` = **Business logic** (orchestrate the flow)
+- `dicoding.service` = **External API** (talk to Dicoding)
+- `gemini.service` = **AI integration** (talk to Gemini)
+- `htmlParser` = **Data transformation** (HTML → text)
 
 Services contain core business logic, external API calls, data processing.
 
