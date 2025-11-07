@@ -6,6 +6,52 @@ sidebar_position: 5
 
 Di tutorial ini, kita akan implement state management untuk quiz app dengan Zustand dan localStorage persistence.
 
+## 🎯 What Problem Are We Solving?
+
+Without state management:
+```tsx
+// ❌ Props drilling nightmare!
+<App>
+  <QuizContainer questions={questions} onAnswer={handleAnswer} onSubmit={handleSubmit}>
+    <Question question={q} selectedAnswer={selected} onAnswer={handleAnswer}>
+      <Option option={opt} selected={selected} onClick={handleClick} />
+    </Question>
+  </QuizContainer>
+</App>
+
+// Every component passes props down!
+// Change prop → update 5 components
+```
+
+With Zustand:
+```tsx
+// ✅ Direct access anywhere!
+function Question() {
+  const { questions, selectAnswer } = useQuizStore(); // No props!
+}
+
+function Option() {
+  const { selectedAnswers } = useQuizStore(); // Direct access!
+}
+```
+
+## 🔗 Where State Fits in Flow
+
+```
+User interacts with UI
+    ↓
+Component calls: selectAnswer('q1', 'opt2')
+    ↓
+ZUSTAND STORE (useQuizStore.ts)
+- Update state: selectedAnswers['q1'] = 'opt2'
+- Trigger re-render ONLY for components using selectedAnswers
+- Persist to localStorage: "learncheck-{userId}-{tutorialId}"
+    ↓
+All components using useQuizStore() get updated automatically
+    ↓
+UI reflects new state
+```
+
 ## Kenapa Zustand?
 
 ### vs Redux
@@ -27,12 +73,47 @@ Di tutorial ini, kita akan implement state management untuk quiz app dengan Zust
 
 ## The Challenge: Dynamic Storage Keys
 
+### 🤔 Why Do We Need Dynamic Keys?
+
+**Problem**: Same localStorage key for all users/tutorials
+```typescript
+// ❌ BAD: One key for everything
+localStorage: {
+  "quiz-storage": {
+    user1: { tutorial35363: {answers: {...}}, tutorial35364: {answers: {...}} },
+    user2: { tutorial35363: {answers: {...}}, tutorial35364: {answers: {...}} },
+  }
+}
+
+// Issues:
+// - User 1 opens tutorial A → loads ALL user data (slow!)
+// - Switching tutorial → must reload entire object
+// - Data corruption risk if two tabs edit same key
+```
+
+**Solution**: Separate key per user + tutorial
+```typescript
+// ✅ GOOD: Isolated keys
+localStorage: {
+  "learncheck-user1-tutorial35363": {answers: {...}, progress: 2},
+  "learncheck-user1-tutorial35364": {answers: {...}, progress: 0},
+  "learncheck-user2-tutorial35363": {answers: {...}, progress: 1},
+}
+
+// Benefits:
+// - Fast loading (only load needed data)
+// - No cross-contamination between quizzes
+// - Clean separation of concerns
+```
+
+### 🤔 The Zustand Limitation
+
 Kita butuh **isolate quiz state per user AND per tutorial**:
 
 ```typescript
-// User 1, Tutorial A → localStorage key: "learncheck-1-A"
-// User 1, Tutorial B → localStorage key: "learncheck-1-B"
-// User 2, Tutorial A → localStorage key: "learncheck-2-A"
+// User 1, Tutorial A → localStorage key: "learncheck-1-35363"
+// User 1, Tutorial B → localStorage key: "learncheck-1-35364"
+// User 2, Tutorial A → localStorage key: "learncheck-2-35363"
 ```
 
 **Problem**: Zustand's `persist` middleware can't access dynamic state dalam `getStorage()` function!

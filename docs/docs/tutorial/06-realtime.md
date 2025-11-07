@@ -6,6 +6,92 @@ sidebar_position: 6
 
 Di tutorial ini, kita implement real-time preference updates TANPA polling. User bisa ubah theme/font di Dicoding classroom, langsung apply di quiz tanpa refresh!
 
+## 🎯 What Problem Are We Solving?
+
+### Scenario:
+```
+1. User opens quiz (theme: light, font: small)
+2. Quiz loads and displays with light theme
+3. User switches to Dicoding settings → changes to dark theme
+4. ❓ How does quiz know to update?
+```
+
+### Solutions Comparison:
+
+**❌ Option 1: Manual Refresh**
+```
+User changes theme → clicks refresh button → quiz reloads
+Problems:
+- Loses quiz progress
+- Bad UX (extra click required)
+- Quiz state not preserved
+```
+
+**❌ Option 2: Continuous Polling**
+```javascript
+setInterval(async () => {
+  const prefs = await fetchPreferences(); // Every 5 seconds!
+  applyTheme(prefs.theme);
+}, 5000);
+
+Problems:
+- 600 requests per 50-minute quiz! (unnecessary load)
+- Bandwidth waste
+- Server load
+- 5s delay before seeing changes
+```
+
+**✅ Option 3: Event-Driven (postMessage)**
+```javascript
+window.addEventListener('message', async (event) => {
+  if (event.data.type === 'preference-updated') {
+    const prefs = await fetchPreferences(); // Only when needed!
+    applyTheme(prefs.theme);
+  }
+});
+
+Benefits:
+- 3-5 requests total (99% reduction!)
+- Instant updates (no polling delay)
+- Low server load
+- Quiz progress preserved
+```
+
+## 🔗 Full Real-time Flow
+
+```
+DICODING CLASSROOM (Parent Window)
+User clicks "Dark Mode"
+    ↓
+Update preferences in Dicoding DB
+    ↓
+parent.postMessage({
+  type: 'preference-updated',
+  timestamp: Date.now()
+}, '*');
+    ↓
+------------------------
+QUIZ APP (iframe)
+    ↓
+window.addEventListener('message') catches event
+    ↓
+useQuizData hook triggered
+    ↓
+Check debounce (prevent rapid-fire requests)
+    ↓
+Fetch fresh preferences: GET /api/v1/preferences?user_id=1
+    ↓
+Update state: setUserPreferences(newPrefs)
+    ↓
+applyPreferencesToUI(newPrefs)
+- document.documentElement.setAttribute('data-theme', 'dark')
+- document.documentElement.setAttribute('data-font-size', 'large')
+    ↓
+CSS variables updated automatically
+    ↓
+UI re-renders with new theme (NO page reload!)
+```
+
 ## The Problem: Cross-Origin Communication
 
 Quiz kita di-embed di Dicoding classroom sebagai `<iframe>`:
