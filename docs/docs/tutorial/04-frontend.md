@@ -6,6 +6,112 @@ sidebar_position: 4
 
 Di tutorial ini, kita akan build frontend React dengan Vite yang display quiz, handle user interaction, dan apply user preferences.
 
+## 🎯 What We're Building
+
+Frontend app yang bisa:
+1. **Fetch quiz data** dari backend API
+2. **Display questions** satu-satu dengan multiple choice options
+3. **Handle user answers** dengan feedback (benar/salah)
+4. **Apply user preferences** (theme, font, layout) real-time
+5. **Save progress** ke localStorage (per user + per tutorial)
+
+## 🔗 Full Data Flow (Backend → Frontend)
+
+```
+BACKEND (Port 4000)
+assessment.controller → assessment.service → dicoding + gemini
+    ↓ (HTTP Response)
+{
+  assessment: { questions: [...] },
+  userPreferences: { theme: "dark", ... }
+}
+    ↓
+FRONTEND (Port 5173)
+    ↓
+api.ts (axios client)
+- POST /api/v1/assessment/generate
+- Receive JSON response
+    ↓
+useQuizData.ts (custom hook)
+- fetchQuestions() → call api.ts
+- setQuestions() → store to Zustand
+- applyPreferences() → update CSS variables
+    ↓
+useQuizStore.ts (Zustand state)
+- Store: questions, selectedAnswers, submittedAnswers
+- Persist to localStorage: "learncheck-{userId}-{tutorialId}"
+    ↓
+App.tsx (main component)
+- Read from Zustand: const {questions} = useQuizStore()
+- Render UI based on state
+    ↓
+QuestionComponent
+- Display question text
+- Display 4 options as buttons
+- Handle onClick → updateSelectedAnswer()
+- Show feedback after submit
+    ↓
+User sees quiz on screen!
+```
+
+## 📂 File Creation Order (Frontend)
+
+**Step 1: Configuration & Setup**
+```
+1. tailwind.config.js       ← Custom colors (primary-50 to primary-950)
+2. postcss.config.js         ← Tailwind + autoprefixer
+3. src/index.css             ← @tailwind directives
+4. src/types.ts              ← TypeScript interfaces matching backend
+```
+
+**Step 2: Services & API**
+```
+5. src/config/constants.ts   ← API_BASE_URL
+6. src/services/api.ts       ← Axios instance + fetchAssessment()
+```
+
+**Step 3: State Management**
+```
+7. src/store/useQuizStore.ts ← Zustand store (questions, answers, persistence)
+```
+
+**Step 4: Custom Hooks**
+```
+8. src/hooks/useQuizData.ts  ← Data fetching + preference application
+```
+
+**Step 5: UI Components (Reusable)**
+```
+9. src/components/ui/Card.tsx          ← Container dengan shadow
+10. src/components/ui/Button.tsx       ← Styled button
+11. src/components/ui/Loader.tsx       ← Spinning loader
+12. src/components/ui/LoadingState.tsx ← Loading text + loader
+```
+
+**Step 6: Main Application**
+```
+13. src/App.tsx      ← Main component (renders everything!)
+14. src/main.tsx     ← Entry point (ReactDOM.render)
+```
+
+### Why This Order?
+
+```
+Config files FIRST
+    ↓ (Types needed by services)
+TypeScript types
+    ↓ (API needs constants)
+Services & API
+    ↓ (Hooks use store + services)
+State management
+    ↓ (Hooks use store)
+Custom hooks
+    ↓ (Components use hooks)
+UI components
+    ↓ (App uses everything)
+Main App
+```
+
 ## Kenapa React + Vite?
 
 ### React
