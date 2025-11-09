@@ -94,22 +94,35 @@ User sees quiz on screen!
 14. src/main.tsx     ← Entry point (ReactDOM.render)
 ```
 
-### Why This Order?
+### Kenapa Urutan Ini?
 
 ```
-Config files FIRST
-    ↓ (Types needed by services)
+Config files DULU
+    ↓ (Types dibutuhkan services)
 TypeScript types
-    ↓ (API needs constants)
+    ↓ (API butuh constants)
 Services & API
-    ↓ (Hooks use store + services)
+    ↓ (Hooks pakai store + services)
 State management
-    ↓ (Hooks use store)
+    ↓ (Hooks pakai store)
 Custom hooks
-    ↓ (Components use hooks)
+    ↓ (Components pakai hooks)
 UI components
-    ↓ (App uses everything)
-Main App
+    ↓ (App.tsx gabungin semua)
+Main Application
+```
+```
+13. src/App.tsx      ← Main component (renders everything!)
+14. src/main.tsx     ← Entry point (ReactDOM.render)
+```
+
+### Kenapa Urutan Ini?
+
+```
+Config files DULU
+    ↓ (Types diperlukan services)
+TypeScript types
+    ↓ (API butuh constants)
 ```
 
 ## Kenapa React + Vite?
@@ -127,70 +140,70 @@ import { useQuizStore } from '../store/useQuizStore';
 import { QUIZ_CONFIG, API_ENDPOINTS } from '../config/constants';
 ```
 
-Why: `useQuizData` sits between the API and the UI. It fetches preferences, triggers quiz generation, and coordinates with `useQuizStore` so both data and UI stay consistent.
+Kenapa: `useQuizData` berada di antara API dan UI. Hook ini fetch preferences, trigger quiz generation, dan koordinasi dengan `useQuizStore` supaya data dan UI tetap konsisten.
 
-2. Responsibilities of the hook
+2. Tanggung jawab hook ini
 
-- Fetch user preferences (initial load + on demand)
-- Listen to `postMessage` events and `focus` events to refresh preferences
-- Respect quiz progress (do not interrupt an in-progress quiz; use `silentUpdate`)
-- Trigger quiz generation via API and set returned assessment into local state
-- Expose flags: `isLoadingPreferences`, `isGeneratingQuiz`, `error` and functions `generateQuiz()` and `refetchPreferences()`
+- Fetch user preferences (load awal + on demand)
+- Listen ke event `postMessage` dan `focus` untuk refresh preferences
+- Respect progress quiz (jangan interrupt quiz yang lagi dikerjain; pakai `silentUpdate`)
+- Trigger quiz generation via API dan set assessment yang dikembalikan ke local state
+- Expose flags: `isLoadingPreferences`, `isGeneratingQuiz`, `error` dan functions `generateQuiz()` dan `refetchPreferences()`
 
-3. Key implementation details (map to functions you'll implement)
+3. Detail implementasi kunci (map ke functions yang akan kamu implement)
 
 - `fetchPreferences(forceRefresh = false, silentUpdate = false)`
-  - Adds cache-busting param (`_t`) when fetching
-  - Uses debounce (`QUIZ_CONFIG.DEBOUNCE_MS`) to avoid repeated fetches
-  - When `silentUpdate` is true, it updates preferences without toggling a loading UI (used during quiz)
+  - Tambah cache-busting param (`_t`) waktu fetching
+  - Pakai debounce (`QUIZ_CONFIG.DEBOUNCE_MS`) supaya gak fetch berulang-ulang
+  - Kalau `silentUpdate` true, update preferences tanpa toggle loading UI (dipakai selama quiz)
 
 - `generateQuiz(isRetry = false)`
-  - Calls `GET /api/v1/assessment` with `tutorial_id` and `user_id`
-  - Uses `fresh=true` when retrying to bypass any cache
-  - Sets `assessmentData` local state (the hook does not persist answers — store handles that)
+  - Panggil `GET /api/v1/assessment` dengan `tutorial_id` dan `user_id`
+  - Pakai `fresh=true` waktu retry untuk bypass cache
+  - Set `assessmentData` local state (hook gak persist answers — store yang handle itu)
 
-- `useEffect` for `postMessage` listener
-  - On `preference-updated` message: schedule a debounced `fetchPreferences(true, isInQuiz)`
+- `useEffect` untuk listener `postMessage`
+  - Pada message `preference-updated`: schedule debounced `fetchPreferences(true, isInQuiz)`
 
-- `useEffect` for window `focus`
-  - On focus, run a silent refresh if quiz in progress, or normal refresh if idle
+- `useEffect` untuk window `focus`
+  - Waktu focus, jalankan silent refresh kalau quiz lagi jalan, atau normal refresh kalau idle
 
-4. How the hook talks to the store (`useQuizStore`)
+4. Cara hook ini bicara dengan store (`useQuizStore`)
 
-- The hook reads `questions = useQuizStore(state => state.questions)` only to determine whether a quiz is in progress and therefore whether to run silent updates.
-- After `generateQuiz()` receives `assessment` from backend, the hook calls `useQuizStore.getState().initialize(userId, tutorialId)` (if not initialized) and `useQuizStore.getState().setQuestions(assessment.questions)` to store questions and enable persistence.
+- Hook baca `questions = useQuizStore(state => state.questions)` cuma untuk cek apakah quiz sedang jalan, jadi bisa tahu harus pakai silent updates atau enggak.
+- Setelah `generateQuiz()` dapat `assessment` dari backend, hook panggil `useQuizStore.getState().initialize(userId, tutorialId)` (kalau belum initialized) dan `useQuizStore.getState().setQuestions(assessment.questions)` untuk simpan questions dan enable persistence.
 
-Why not let the hook fully manage questions? Separation of concerns:
-- Hook = data fetching and ephemeral UI flags
-- Store = persistent quiz state and user interactions
+Kenapa gak biarkan hook yang fully manage questions? Separation of concerns:
+- Hook = data fetching dan ephemeral UI flags
+- Store = persistent quiz state dan user interactions
 
-5. Minimal API usage example inside the hook
+5. Contoh minimal API usage di dalam hook
 
 ```ts
 const response = await api.get(API_ENDPOINTS.ASSESSMENT, { params: { tutorial_id: tutorialId, user_id: userId } });
 setAssessmentData(response.data);
-// Persist questions into the store
+// Persist questions ke store
 useQuizStore.getState().initialize(userId, tutorialId);
 useQuizStore.getState().setQuestions(response.data.assessment.questions);
 ```
 
-6. Tests and manual checks
+6. Testing dan pengecekan manual
 
-- Manual: open the app, call `generateQuiz()` from console and verify `useQuizStore.getState().questions` is populated.
-- Unit test idea: mock `api.get` responses and assert hook returns correct flags and exposes `generateQuiz`.
+- Manual: buka app, panggil `generateQuiz()` dari console dan cek `useQuizStore.getState().questions` sudah terisi.
+- Ide unit test: mock response `api.get` dan assert hook return flags yang benar serta expose `generateQuiz`.
 
 ---
 
-Add this hook after you have the store in place so you can call `initialize()` and `setQuestions()` immediately after generation.
+Tambahkan hook ini setelah kamu punya store, jadi bisa langsung panggil `initialize()` dan `setQuestions()` setelah generation.
 
 
 ### React
-- **Component-based**: UI dipecah jadi small, reusable components
-- **Declarative**: Kamu describe apa yang mau ditampilin, React handle sisanya
-- **Rich Ecosystem**: Banyak library pendukung (state management, routing, etc.)
+- **Component-based**: UI dipecah jadi komponen kecil yang reusable
+- **Declarative**: Kamu describe apa yang mau ditampilin, React yang handle sisanya
+- **Rich Ecosystem**: Banyak library pendukung (state management, routing, dll.)
 
 ### Vite
-- **Super Fast**: Hot Module Replacement (HMR) ~50ms
+- **Super Cepat**: Hot Module Replacement (HMR) ~50ms
 - **No Config**: Works out of the box untuk React + TypeScript
 - **Modern**: ES modules, optimized build
 
@@ -240,10 +253,10 @@ frontend/
 <!-- index.html -->
 <script src="https://cdn.tailwindcss.com"></script>
 ```
-Problems:
+Masalahnya:
 - Custom colors TIDAK work (`primary-500`, dll)
 - Production bundle besar (include semua Tailwind classes)
-- Slower loading time
+- Loading time lebih lambat
 
 ✅ **Build System** (yang kita pakai):
 ```css
@@ -252,10 +265,10 @@ Problems:
 @tailwind components;
 @tailwind utilities;
 ```
-Benefits:
+Keuntungannya:
 - Custom colors WORK! 
 - Production bundle kecil (only used classes)
-- Faster loading time
+- Loading time lebih cepat
 
 ### Setup Steps
 
@@ -956,33 +969,33 @@ npm run dev
 
 Open browser: `http://localhost:5173/?tutorial_id=35363&user_id=1`
 
-Expected flow:
+Alur yang diharapkan:
 1. Loading spinner (fetch preferences) ~0.5s
-2. Intro screen with "Mulai Cek Pemahaman!" button
-3. Click button → Loading state "Membuat Kuis Untukmu..." ~15s
-4. Quiz appears dengan 3 questions
-5. Answer questions, see feedback
-6. Results screen dengan score
+2. Intro screen dengan tombol "Mulai Cek Pemahaman!"
+3. Klik tombol → Loading state "Membuat Kuis Untukmu..." ~15s
+4. Quiz muncul dengan 3 pertanyaan
+5. Jawab pertanyaan, lihat feedback
+6. Results screen dengan skor
 
-## Common Issues
+## Masalah Umum
 
 ### Issue 1: Custom colors tidak work
 
-**Cause**: Tailwind CDN masih ada di `index.html`
+**Penyebab**: Tailwind CDN masih ada di `index.html`
 
-**Solution**: Remove CDN, ensure `index.css` imported di `main.tsx`
+**Solusi**: Hapus CDN, pastikan `index.css` di-import di `main.tsx`
 
 ### Issue 2: Dark mode tidak work
 
-**Cause**: Missing `dark` class di HTML
+**Penyebab**: Kurang `dark` class di HTML
 
-**Solution**: Check `QuizContainer` apply dark class dengan benar
+**Solusi**: Cek `QuizContainer` apply dark class dengan benar
 
 ### Issue 3: Icons tidak muncul
 
-**Cause**: `lucide-react` not installed
+**Penyebab**: `lucide-react` belum diinstall
 
-**Solution**: 
+**Solusi**: 
 ```bash
 npm install lucide-react
 ```

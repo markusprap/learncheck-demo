@@ -59,21 +59,22 @@ Buat `tsconfig.json`:
 ```json
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "es6",
     "module": "commonjs",
-    "lib": ["ES2020"],
-    "outDir": "./dist",
     "rootDir": "./src",
-    "strict": true,
+    "outDir": "./dist",
     "esModuleInterop": true,
+    "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "moduleResolution": "node"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules"]
 }
 ```
+
+**Catatan**: Kita pakai `target: "es6"` (setara ES2015) karena cukup untuk Node.js modern dan kompatibel dengan library yang kita pakai.
 
 Buat struktur folder backend:
 
@@ -295,6 +296,6 @@ Project structure sudah siap. Di tutorial berikutnya, kita akan:
 - Setup routing dan controllers
 - Integrasi dengan Gemini AI
 
-## Next Steps
+## Langkah Selanjutnya
 
 Lanjut ke [Backend API dengan Express](./02-backend.md) →

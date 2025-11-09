@@ -6,9 +6,9 @@ sidebar_position: 5
 
 Di tutorial ini, kita akan implement state management untuk quiz app dengan Zustand dan localStorage persistence.
 
-## 🎯 What Problem Are We Solving?
+## 🎯 Masalah Apa yang Kita Pecahkan?
 
-Without state management:
+Tanpa state management:
 ```tsx
 // ❌ Props drilling nightmare!
 <App>
@@ -19,37 +19,37 @@ Without state management:
   </QuizContainer>
 </App>
 
-// Every component passes props down!
-// Change prop → update 5 components
+// Setiap component harus pass props ke bawah!
+// Ubah prop → update 5 components
 ```
 
-With Zustand:
+Dengan Zustand:
 ```tsx
-// ✅ Direct access anywhere!
+// ✅ Akses langsung dari mana saja!
 function Question() {
-  const { questions, selectAnswer } = useQuizStore(); // No props!
+  const { questions, selectAnswer } = useQuizStore(); // Tanpa props!
 }
 
 function Option() {
-  const { selectedAnswers } = useQuizStore(); // Direct access!
+  const { selectedAnswers } = useQuizStore(); // Akses langsung!
 }
 ```
 
-## 🔗 Where State Fits in Flow
+## 🔗 Di Mana State Fit dalam Flow
 
 ```
-User interacts with UI
+User interaksi dengan UI
     ↓
-Component calls: selectAnswer('q1', 'opt2')
+Component panggil: selectAnswer('q1', 'opt2')
     ↓
 ZUSTAND STORE (useQuizStore.ts)
 - Update state: selectedAnswers['q1'] = 'opt2'
-- Trigger re-render ONLY for components using selectedAnswers
-- Persist to localStorage: "learncheck-{userId}-{tutorialId}"
+- Trigger re-render HANYA untuk components yang pakai selectedAnswers
+- Persist ke localStorage: "learncheck-{userId}-{tutorialId}"
     ↓
-All components using useQuizStore() get updated automatically
+Semua components yang pakai useQuizStore() auto ke-update
     ↓
-UI reflects new state
+UI reflect state baru
 ```
 
 ## Kenapa Zustand?
@@ -69,15 +69,15 @@ UI reflects new state
 | DevTools | No | Yes (with middleware) |
 | Persistence | Manual | Built-in middleware |
 
-**TL;DR**: Zustand = Redux simplicity + Context performance + localStorage built-in
+**Ringkasan**: Zustand = Redux yang simpel + Context yang perform + localStorage built-in
 
 ## The Challenge: Dynamic Storage Keys
 
-### 🤔 Why Do We Need Dynamic Keys?
+### 🤔 Kenapa Kita Butuh Dynamic Keys?
 
-**Problem**: Same localStorage key for all users/tutorials
+**Masalah**: localStorage key yang sama untuk semua user/tutorial
 ```typescript
-// ❌ BAD: One key for everything
+// ❌ JELEK: Satu key untuk semuanya
 localStorage: {
   "quiz-storage": {
     user1: { tutorial35363: {answers: {...}}, tutorial35364: {answers: {...}} },
@@ -85,30 +85,30 @@ localStorage: {
   }
 }
 
-// Issues:
-// - User 1 opens tutorial A → loads ALL user data (slow!)
-// - Switching tutorial → must reload entire object
-// - Data corruption risk if two tabs edit same key
+// Masalahnya:
+// - User 1 buka tutorial A → load SEMUA data user (lambat!)
+// - Ganti tutorial → harus reload entire object
+// - Risiko data corruption kalau 2 tab edit key yang sama
 ```
 
-**Solution**: Separate key per user + tutorial
+**Solusi**: Key terpisah per user + tutorial
 ```typescript
-// ✅ GOOD: Isolated keys
+// ✅ BAGUS: Keys yang terisolasi
 localStorage: {
   "learncheck-user1-tutorial35363": {answers: {...}, progress: 2},
   "learncheck-user1-tutorial35364": {answers: {...}, progress: 0},
   "learncheck-user2-tutorial35363": {answers: {...}, progress: 1},
 }
 
-// Benefits:
-// - Fast loading (only load needed data)
-// - No cross-contamination between quizzes
-// - Clean separation of concerns
+// Keuntungannya:
+// - Loading cepat (hanya load data yang dibutuhkan)
+// - Gak ada cross-contamination antar quiz
+// - Separation of concerns yang bersih
 ```
 
-### 🤔 The Zustand Limitation
+### 🤔 Limitasi Zustand
 
-Kita butuh **isolate quiz state per user AND per tutorial**:
+Kita butuh **isolate quiz state per user DAN per tutorial**:
 
 ```typescript
 // User 1, Tutorial A → localStorage key: "learncheck-1-35363"
@@ -116,10 +116,10 @@ Kita butuh **isolate quiz state per user AND per tutorial**:
 // User 2, Tutorial A → localStorage key: "learncheck-2-35363"
 ```
 
-**Problem**: Zustand's `persist` middleware can't access dynamic state dalam `getStorage()` function!
+**Masalah**: Zustand's `persist` middleware gak bisa akses dynamic state dalam function `getStorage()`!
 
 ```typescript
-// ❌ DOESN'T WORK - get() not available in getStorage()
+// ❌ GAK JALAN - get() tidak tersedia di getStorage()
 persist(
   (set, get) => ({ ... }),
   {
@@ -132,7 +132,7 @@ persist(
 )
 ```
 
-**Solution**: Proxy storage pattern! 🎉
+**Solusi**: Proxy storage pattern! 🎉
 
 ## Storage Proxy Pattern (Advanced!)
 
@@ -297,9 +297,9 @@ export const useQuizStore = create<QuizState & QuizActions>()(
 );
 ```
 
-### Step-by-step: How to create `useQuizStore.ts`
+### Step-by-step: Cara membuat `useQuizStore.ts`
 
-1. Create the file and import dependencies
+1. Buat file dan import dependencies
 
 ```ts
 // frontend/src/store/useQuizStore.ts
@@ -308,27 +308,27 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Question } from '../types';
 ```
 
-Why: These imports give you the store builder (`create`), persistence middleware (`persist`) and a JSON storage wrapper so we can plug our dynamic storage proxy.
+Kenapa: Import ini kasih kamu store builder (`create`), persistence middleware (`persist`) dan JSON storage wrapper jadi bisa plug dynamic storage proxy kita.
 
-2. Define state and actions types
+2. Define state dan actions types
 
 ```ts
 type QuizState = { questions: Question[]; currentQuestionIndex: number; selectedAnswers: Record<string,string>; submittedAnswers: Record<string,boolean>; quizOver: boolean; revealAnswers: boolean; storageKey: string; };
 type QuizActions = { setQuestions: (q: Question[]) => void; selectAnswer: (qid: string, optId: string) => void; submitAnswer: (qid: string) => void; nextQuestion: () => void; finishQuiz: () => void; reset: () => void; initialize: (userId: string, tutorialId: string) => void; };
 ```
 
-Why: Explicit types make the store predictable and enable IDE autocomplete. `initialize` is important because the storage key is dynamic per user+tutorial.
+Kenapa: Explicit types bikin store predictable dan enable IDE autocomplete. `initialize` penting karena storage key dynamic per user+tutorial.
 
 3. Implement `dynamicStorage` proxy
 
 ```ts
-// dynamicStorage provides getItem/setItem/removeItem but delegates to current store.get()
+// dynamicStorage provide getItem/setItem/removeItem tapi delegate ke store.get() saat ini
 const dynamicStorage = { _get: (() => ({})) as () => QuizState & QuizActions, getItem(name){ const s = dynamicStorage._get(); return localStorage.getItem(s.storageKey || name); }, setItem(name, value){ const s = dynamicStorage._get(); localStorage.setItem(s.storageKey || name, value); }, removeItem(name){ const s = dynamicStorage._get(); localStorage.removeItem(s.storageKey || name); } };
 ```
 
-Why: Zustand's `persist` cannot access the store `get` during initialization; a proxy lets the store set its own `get` into the proxy so the storage methods can resolve the current dynamic key at runtime.
+Kenapa: Zustand's `persist` gak bisa akses store `get` saat initialization; proxy kasih store untuk set `get` sendiri ke proxy jadi storage methods bisa resolve dynamic key saat runtime.
 
-4. Create the store with `persist(...)`
+4. Buat store dengan `persist(...)`
 
 ```ts
 export const useQuizStore = create<QuizState & QuizActions>()(
@@ -336,35 +336,35 @@ export const useQuizStore = create<QuizState & QuizActions>()(
 );
 ```
 
-Why: We wire `dynamicStorage._get = get;` so the proxy can find the `storageKey`. `partialize` controls what gets persisted (we don't persist ephemeral flags like `revealAnswers`).
+Kenapa: Kita wire `dynamicStorage._get = get;` jadi proxy bisa cari `storageKey`. `partialize` control apa yang di-persist (kita gak persist ephemeral flags kayak `revealAnswers`).
 
-5. Key actions to implement (what they do)
+5. Key actions yang harus diimplementasikan (apa yang dilakukan)
 
-- `initialize(userId, tutorialId)` — compute `learncheck-${userId}-${tutorialId}`; if different from current `storageKey`, load saved state from `localStorage` and set it, otherwise no-op. Ensures per-user-per-tutorial isolation.
-- `setQuestions(questions)` — set the questions array and reset quiz progress flags (fresh start).
-- `selectAnswer(questionId, optionId)` — record selected answer unless already submitted.
-- `submitAnswer(questionId)` — mark question as submitted (used to prevent changing answer after submit).
-- `nextQuestion()` — advance `currentQuestionIndex`; set `quizOver` when reaching the end.
+- `initialize(userId, tutorialId)` — compute `learncheck-${userId}-${tutorialId}`; kalau beda dari `storageKey` sekarang, load saved state dari `localStorage` dan set, kalau enggak ya no-op. Jamin isolasi per-user-per-tutorial.
+- `setQuestions(questions)` — set array questions dan reset quiz progress flags (fresh start).
+- `selectAnswer(questionId, optionId)` — record selected answer kecuali sudah submitted.
+- `submitAnswer(questionId)` — mark question sebagai submitted (dipakai untuk prevent ubah jawaban setelah submit).
+- `nextQuestion()` — advance `currentQuestionIndex`; set `quizOver` kalau sudah sampai akhir.
 - `finishQuiz()` — mark `quizOver = true`.
-- `reset()` — clear progress but keep `storageKey`.
+- `reset()` — clear progress tapi keep `storageKey`.
 
-Why: Listing these responsibilities helps implementers know what to code and why.
+Kenapa: List tanggung jawab ini bantu implementor tahu harus code apa dan kenapa.
 
-6. Persistence details
+6. Detail persistence
 
-- The store uses `createJSONStorage(() => dynamicStorage)` so persisted data is written/read using the current `storageKey`.
-- On `initialize`, we manually load saved state from localStorage for the new key and merge it into the current state to avoid losing progress when switching users or tutorials.
+- Store pakai `createJSONStorage(() => dynamicStorage)` jadi persisted data ditulis/dibaca pakai `storageKey` saat ini.
+- Saat `initialize`, kita manual load saved state dari localStorage untuk key baru dan merge ke current state untuk avoid kehilangan progress saat switch user atau tutorial.
 
-Why: This guarantees the persisted state belongs to the correct user+tutorial and avoids conflicts.
+Kenapa: Ini jamin persisted state milik user+tutorial yang benar dan avoid konflik.
 
-7. Testing the store
+7. Testing store
 
-- Manual test: open frontend, call `useQuizStore.getState().initialize('1','35363')` in console and inspect `localStorage` key `learncheck-1-35363`.
-- Unit test idea: mock `localStorage`, call actions in sequence (setQuestions → selectAnswer → submitAnswer → nextQuestion) and assert state shape.
+- Manual test: buka frontend, panggil `useQuizStore.getState().initialize('1','35363')` di console dan inspect localStorage key `learncheck-1-35363`.
+- Ide unit test: mock `localStorage`, panggil actions berurutan (setQuestions → selectAnswer → submitAnswer → nextQuestion) dan assert bentuk state.
 
 ---
 
-Now that the store is clear, next we'll explain how `useQuizData` consumes the store and where to create the hook.
+Sekarang store sudah jelas, selanjutnya kita jelasin bagaimana `useQuizData` konsumsi store dan dimana buat hook-nya.
 
 
 ## Deep Dive: How It Works
@@ -401,13 +401,13 @@ persist(
 
 Sekarang `dynamicStorage` punya akses ke store state via `get()`.
 
-### 3. Initialize Method (Critical!)
+### 3. Initialize Method (Penting!)
 
 ```typescript
 initialize: (userId, tutorialId) => {
   const key = `learncheck-${userId}-${tutorialId}`;
   
-  // Load persisted state from localStorage
+  // Load persisted state dari localStorage
   const savedStateRaw = localStorage.getItem(key);
   let savedState = {};
   if (savedStateRaw) {
@@ -425,14 +425,14 @@ initialize: (userId, tutorialId) => {
 }
 ```
 
-**Flow**:
+**Alur**:
 1. Generate storage key: `learncheck-1-35363`
-2. Check localStorage for that key
-3. If exists → parse and load saved progress
-4. If not → use defaults
-5. Set `storageKey` state → proxy uses this for future saves
+2. Cek localStorage untuk key itu
+3. Kalau ada → parse dan load saved progress
+4. Kalau enggak → pakai defaults
+5. Set state `storageKey` → proxy pakai ini untuk saves selanjutnya
 
-### 4. Partialize (What to Persist)
+### 4. Partialize (Apa yang Di-Persist)
 
 ```typescript
 partialize: (state) => ({
@@ -443,30 +443,30 @@ partialize: (state) => ({
 }),
 ```
 
-**Persisted**:
+**Yang Di-Persist**:
 - ✅ `currentQuestionIndex`: Resume dari question yang sama
-- ✅ `selectedAnswers`: User answers preserved
-- ✅ `submittedAnswers`: Which questions submitted
-- ✅ `quizOver`: Quiz finished or not
+- ✅ `selectedAnswers`: Jawaban user tersimpan
+- ✅ `submittedAnswers`: Question mana yang sudah submit
+- ✅ `quizOver`: Quiz selesai atau belum
 
-**NOT Persisted**:
-- ❌ `questions`: Loaded fresh dari API (bisa berubah)
-- ❌ `revealAnswers`: UI state, not important
-- ❌ `storageKey`: Meta, not quiz progress
+**TIDAK Di-Persist**:
+- ❌ `questions`: Load fresh dari API (bisa berubah)
+- ❌ `revealAnswers`: UI state, gak penting
+- ❌ `storageKey`: Meta, bukan quiz progress
 
-### 5. State Actions Explained
+### 5. Penjelasan State Actions
 
 #### setQuestions
 
 ```typescript
 setQuestions: (questions) => set({ 
   questions,
-  quizOver: false,  // ← CRITICAL: Reset quiz state
+  quizOver: false,  // ← PENTING: Reset quiz state
   revealAnswers: false,
 })
 ```
 
-**Why reset `quizOver`?**
+**Kenapa reset `quizOver`?**
 
 Tanpa ini, kalau user klik "Try Again" setelah finish quiz, quiz langsung ke results screen (karena `quizOver: true` masih persist).
 
@@ -474,7 +474,7 @@ Tanpa ini, kalau user klik "Try Again" setelah finish quiz, quiz langsung ke res
 
 ```typescript
 selectAnswer: (questionId, optionId) => {
-  if (get().submittedAnswers[questionId]) return; // ← Prevent change after submit
+  if (get().submittedAnswers[questionId]) return; // ← Prevent ubah setelah submit
   set((state) => ({
     selectedAnswers: {
       ...state.selectedAnswers,
@@ -484,7 +484,7 @@ selectAnswer: (questionId, optionId) => {
 }
 ```
 
-**Immutable update**: Spread operator untuk create new object (React re-render detection).
+**Immutable update**: Spread operator untuk create object baru (React re-render detection).
 
 #### nextQuestion
 
@@ -509,14 +509,14 @@ reset: () => {
     submittedAnswers: {},
     quizOver: false,
     revealAnswers: false,
-    // ⚠️ KEEP storageKey! Don't reset user/tutorial context
+    // ⚠️ KEEP storageKey! Jangan reset user/tutorial context
   });
 }
 ```
 
-**Used for**: "Coba Lagi" button (clear progress tapi keep context).
+**Dipakai untuk**: Tombol "Coba Lagi" (clear progress tapi keep context).
 
-## Usage in Components
+## Penggunaan di Components
 
 ### Initialize Store (App.tsx)
 
@@ -526,7 +526,7 @@ const App = () => {
   
   useEffect(() => {
     if (userId && tutorialId) {
-      initialize(userId, tutorialId); // ← CRITICAL: Call before quiz starts!
+      initialize(userId, tutorialId); // ← PENTING: Panggil sebelum quiz dimulai!
     }
   }, [userId, tutorialId, initialize]);
   
@@ -534,7 +534,7 @@ const App = () => {
 };
 ```
 
-**MUST call before quiz starts!** Tanpa ini, storage key = default `'quiz-storage'`, semua user share progress! 😱
+**WAJIB dipanggil sebelum quiz dimulai!** Tanpa ini, storage key = default `'quiz-storage'`, semua user share progress! 😱
 
 ### Load Questions
 
@@ -565,7 +565,7 @@ const QuestionComponent = ({ question }) => {
 };
 ```
 
-**Zustand magic**: Only `QuestionComponent` re-renders saat `selectedAnswers` change. Other components unaffected!
+**Zustand magic**: Hanya `QuestionComponent` yang re-render saat `selectedAnswers` berubah. Components lain gak terpengaruh!
 
 ### Submit Answer
 
@@ -603,30 +603,30 @@ const Quiz = () => {
 
 ## Testing State Persistence
 
-### Test 1: Resume Quiz After Refresh
+### Test 1: Resume Quiz Setelah Refresh
 
-1. Start quiz: `http://localhost:5173/?tutorial_id=35363&user_id=1`
-2. Answer Question 1
+1. Mulai quiz: `http://localhost:5173/?tutorial_id=35363&user_id=1`
+2. Jawab Question 1
 3. Refresh page (F5)
-4. **Expected**: Quiz resumes at Question 1 dengan answer preserved
+4. **Yang diharapkan**: Quiz resume di Question 1 dengan answer tersimpan
 
 ### Test 2: Multiple Users
 
 1. User 1: `?tutorial_id=35363&user_id=1`
-   - Answer question 1 → Option A
+   - Jawab question 1 → Option A
 2. User 2: `?tutorial_id=35363&user_id=2`
-   - Answer question 1 → Option B
-3. Back to User 1: `?tutorial_id=35363&user_id=1`
-   - **Expected**: Still shows Option A selected
+   - Jawab question 1 → Option B
+3. Balik ke User 1: `?tutorial_id=35363&user_id=1`
+   - **Yang diharapkan**: Masih tampil Option A selected
 
 ### Test 3: Multiple Tutorials
 
 1. Tutorial A: `?tutorial_id=35363&user_id=1`
-   - Progress to question 2
+   - Progress ke question 2
 2. Tutorial B: `?tutorial_id=99999&user_id=1`
-   - Start from question 1
-3. Back to Tutorial A: `?tutorial_id=35363&user_id=1`
-   - **Expected**: Resume at question 2
+   - Mulai dari question 1
+3. Balik ke Tutorial A: `?tutorial_id=35363&user_id=1`
+   - **Yang diharapkan**: Resume di question 2
 
 ## localStorage Structure
 
@@ -652,16 +652,16 @@ Check browser DevTools → Application → Local Storage:
 
 ## Performance Optimization
 
-### Selector Pattern (Prevent Unnecessary Re-renders)
+### Selector Pattern (Prevent Re-render yang Gak Perlu)
 
 ```typescript
-// ❌ BAD - Component re-renders on ANY state change
+// ❌ JELEK - Component re-render pada SETIAP state change
 const Quiz = () => {
   const store = useQuizStore(); // ALL state
   return <div>{store.currentQuestionIndex}</div>;
 };
 
-// ✅ GOOD - Only re-renders when currentQuestionIndex changes
+// ✅ BAGUS - Hanya re-render saat currentQuestionIndex berubah
 const Quiz = () => {
   const currentQuestionIndex = useQuizStore(state => state.currentQuestionIndex);
   return <div>{currentQuestionIndex}</div>;
@@ -672,99 +672,99 @@ const Quiz = () => {
 
 ```typescript
 const Quiz = () => {
-  // Each selector independently tracks changes
+  // Setiap selector independently track changes
   const questions = useQuizStore(state => state.questions);
   const currentIndex = useQuizStore(state => state.currentQuestionIndex);
   const nextQuestion = useQuizStore(state => state.nextQuestion);
   
-  // Re-renders only when questions OR currentIndex change
-  // nextQuestion function stable, doesn't cause re-render
+  // Re-render hanya saat questions ATAU currentIndex berubah
+  // nextQuestion function stable, gak cause re-render
 };
 ```
 
-## Common Issues
+## Masalah Umum
 
-### Issue 1: State not persisting
+### Issue 1: State tidak persist
 
-**Cause**: `initialize()` not called
+**Penyebab**: `initialize()` tidak dipanggil
 
-**Solution**: Check `useEffect` in App.tsx calls `initialize(userId, tutorialId)`
+**Solusi**: Cek `useEffect` di App.tsx panggil `initialize(userId, tutorialId)`
 
-### Issue 2: Shared state across users
+### Issue 2: Shared state antar user
 
-**Cause**: Same `storageKey` for all users
+**Penyebab**: `storageKey` yang sama untuk semua user
 
-**Solution**: Ensure `initialize()` creates unique key: `learncheck-${userId}-${tutorialId}`
+**Solusi**: Pastikan `initialize()` create unique key: `learncheck-${userId}-${tutorialId}`
 
-### Issue 3: Old data from different tutorial
+### Issue 3: Data lama dari tutorial berbeda
 
-**Cause**: `initialize()` not called when params change
+**Penyebab**: `initialize()` tidak dipanggil saat params berubah
 
-**Solution**: Add userId and tutorialId to useEffect deps:
+**Solusi**: Tambah userId dan tutorialId ke useEffect deps:
 ```typescript
 useEffect(() => {
   initialize(userId, tutorialId);
-}, [userId, tutorialId, initialize]); // ← Deps here!
+}, [userId, tutorialId, initialize]); // ← Deps di sini!
 ```
 
-### Issue 4: Quiz immediately finishes
+### Issue 4: Quiz langsung selesai
 
-**Cause**: `quizOver: true` persisted, not reset on new quiz
+**Penyebab**: `quizOver: true` persist, gak di-reset pada quiz baru
 
-**Solution**: `setQuestions()` should reset `quizOver: false`
+**Solusi**: `setQuestions()` harus reset `quizOver: false`
 
-## Architecture Summary
+## Ringkasan Arsitektur
 
 ```
-User navigates to URL with tutorial_id & user_id
+User navigasi ke URL dengan tutorial_id & user_id
     ↓
-App.tsx calls initialize(userId, tutorialId)
+App.tsx panggil initialize(userId, tutorialId)
     ↓
 Zustand store:
   - Set storageKey = "learncheck-{userId}-{tutorialId}"
-  - Load saved state from localStorage[storageKey]
-  - Restore currentQuestionIndex, selectedAnswers, etc.
+  - Load saved state dari localStorage[storageKey]
+  - Restore currentQuestionIndex, selectedAnswers, dll.
     ↓
-User interacts with quiz (select, submit, next)
+User interaksi dengan quiz (select, submit, next)
     ↓
 Zustand actions update state
     ↓
-Persist middleware automatically saves to localStorage[storageKey]
+Persist middleware auto save ke localStorage[storageKey]
     ↓
-User refreshes page → State restored from localStorage
+User refresh page → State restored dari localStorage
 ```
 
 ## Best Practices
 
-### 1. Always Initialize Before Use
+### 1. Selalu Initialize Sebelum Dipakai
 
 ```typescript
-// ✅ Initialize first
+// ✅ Initialize dulu
 initialize(userId, tutorialId);
 setQuestions(questions);
 
-// ❌ Don't use store before initialize
+// ❌ Jangan pakai store sebelum initialize
 setQuestions(questions); // Wrong storage key!
 initialize(userId, tutorialId);
 ```
 
-### 2. Reset State on New Quiz
+### 2. Reset State pada Quiz Baru
 
 ```typescript
 const handleStartQuiz = () => {
-  reset(); // ← Clear old progress
+  reset(); // ← Clear progress lama
   setQuizStarted(true);
   generateQuiz();
 };
 ```
 
-### 3. Keep storageKey Immutable During Quiz
+### 3. Keep storageKey Immutable Selama Quiz
 
 ```typescript
-// ❌ DON'T change storageKey mid-quiz
-initialize(newUserId, newTutorialId); // Progress lost!
+// ❌ JANGAN ubah storageKey mid-quiz
+initialize(newUserId, newTutorialId); // Progress hilang!
 
-// ✅ Finish quiz first, then navigate
+// ✅ Finish quiz dulu, baru navigate
 finishQuiz();
 window.location.href = `?tutorial_id=${newId}&user_id=${userId}`;
 ```
@@ -774,15 +774,15 @@ window.location.href = `?tutorial_id=${newId}&user_id=${userId}`;
 Zustand store kita sekarang punya:
 - ✅ Dynamic localStorage keys (per user per tutorial)
 - ✅ Automatic state persistence
-- ✅ Resume quiz after refresh
-- ✅ Isolated state (no cross-user contamination)
+- ✅ Resume quiz setelah refresh
+- ✅ Isolated state (gak ada cross-user contamination)
 - ✅ Performance optimized (selector pattern)
 - ✅ Type-safe (TypeScript interfaces)
 
-**Innovation**: Storage proxy pattern untuk solve Zustand limitation dengan dynamic keys!
+**Inovasi**: Storage proxy pattern untuk solve limitasi Zustand dengan dynamic keys!
 
 ## Next Steps
 
-State management done! Sekarang kita implement **real-time preference updates** dari Dicoding classroom.
+State management selesai! Sekarang kita implement **real-time preference updates** dari Dicoding classroom.
 
 Lanjut ke [Real-time Preferences dengan postMessage](./06-realtime.md) →

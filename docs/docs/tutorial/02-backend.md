@@ -239,30 +239,30 @@ export default app;
 
 ## Constants & Configuration
 
-### 🤔 Why We Need This File?
+### 🤔 Kenapa Kita Butuh File Ini?
 
-**Problem**: Magic strings dan numbers scattered di codebase
+**Problem**: Magic strings dan numbers berceceran di codebase
 ```typescript
-// ❌ BAD: Magic strings everywhere
+// ❌ BURUK: Magic strings di mana-mana
 fetch('https://learncheck-dicoding-mock-...'); // Line 45
 fetch('https://learncheck-dicoding-mock-...'); // Line 128 (typo!)
 model: 'gemini-2.5-flash' // Line 67
-model: 'gemini-2-flash'   // Line 201 (different version!)
+model: 'gemini-2-flash'   // Line 201 (versi beda!)
 ```
 
 **Solution**: Single source of truth
 ```typescript
-// ✅ GOOD: One place to manage
+// ✅ BAGUS: Satu tempat untuk manage
 export const API_CONFIG = {
-  DICODING_BASE_URL: '...',  // Change once, affects everywhere
+  DICODING_BASE_URL: '...',  // Ubah sekali, berlaku di semua tempat
   GEMINI_MODEL: 'gemini-2.5-flash',
 }
 ```
 
 **Benefits**:
-- 🔄 Easy to update (change model version in 1 place)
-- 🐛 Less bugs (no typos in URLs)
-- 📖 Readable (named constants explain meaning)
+- 🔄 Gampang diupdate (ganti versi model di 1 tempat doang)
+- 🐛 Kurang bug (gak ada typo di URL)
+- 📖 Lebih readable (nama konstanta menjelaskan maksudnya)
 
 Buat `backend/src/config/constants.ts`:
 
@@ -293,29 +293,29 @@ export const HTTP_STATUS = {
 
 ## TypeScript Types
 
-### 🤔 Why We Need This File?
+### 🤔 Kenapa Kita Butuh File Ini?
 
 **Problem**: Tanpa types, bugs muncul di runtime
 ```typescript
-// ❌ Without types
+// ❌ Tanpa types
 const prefs = await getUserPrefs();
 console.log(prefs.theem); // Typo! Runtime error
-console.log(prefs.fontSize); // undefined, expected 'small' | 'medium' | 'large'
+console.log(prefs.fontSize); // undefined, harusnya 'small' | 'medium' | 'large'
 ```
 
-**Solution**: Type safety catches bugs at compile time
+**Solution**: Type safety catches bugs di compile time
 ```typescript
-// ✅ With types
+// ✅ Dengan types
 const prefs: UserPreferences = await getUserPrefs();
-console.log(prefs.theem); // ⚠️ TypeScript error: Property 'theem' does not exist
-console.log(prefs.theme);  // ✅ Autocomplete works!
+console.log(prefs.theem); // ⚠️ TypeScript error: Property 'theem' tidak ada
+console.log(prefs.theme);  // ✅ Autocomplete jalan!
 ```
 
 **Benefits**:
-- 🐛 Catch typos before runtime
-- 🧠 Better IDE autocomplete
+- 🐛 Tangkap typo sebelum runtime
+- 🧠 IDE autocomplete lebih bagus
 - 📝 Self-documenting code
-- 🔄 Easier refactoring
+- 🔄 Refactoring lebih gampang
 
 Buat `backend/src/types/index.ts`:
 
@@ -367,32 +367,32 @@ export interface ErrorResponse {
 
 ## Routing Structure
 
-### 🤔 Why We Need Routes?
+### 🤔 Kenapa Kita Butuh Routes?
 
-**Problem**: All endpoints in one big file = maintenance nightmare
+**Problem**: Semua endpoint di satu file besar = nightmare
 ```typescript
-// ❌ BAD: Everything in app.ts
+// ❌ BURUK: Semuanya di app.ts
 app.get('/api/v1/assessment', handler1);
 app.get('/api/v1/preferences', handler2);
 app.post('/api/v1/users', handler3);
 app.put('/api/v1/users/:id', handler4);
-// ... 50 more routes
+// ... 50 routes lagi
 ```
 
 **Solution**: Modular routing by feature
 ```typescript
-// ✅ GOOD: Organized by domain
+// ✅ BAGUS: Organized by domain
 routes/
-  index.ts          ← Main router (mounts all sub-routers)
-  assessment.routes.ts  ← All assessment-related routes
-  users.routes.ts       ← All user-related routes (future)
+  index.ts          ← Main router (mount semua sub-router)
+  assessment.routes.ts  ← Semua route related assessment
+  users.routes.ts       ← Semua route related user (future)
 ```
 
 **Benefits**:
-- 📁 Organized by feature/domain
-- 🔍 Easy to find routes
-- 👥 Multiple devs can work on different route files
-- 🧪 Easier to test individual route modules
+- 📁 Terorganisir by feature/domain
+- 🔍 Gampang cari routes
+- 👥 Multiple devs bisa kerja di file route berbeda
+- 🧪 Lebih gampang test individual route modules
 
 ### File 1: Main Router
 
@@ -413,10 +413,10 @@ export default router;
 
 ### File 2: Assessment Routes
 
-**Why separate file?** All assessment-related endpoints in one place.
+**Kenapa file terpisah?** Semua endpoint related assessment di satu tempat.
 
 **Route Design Decisions**:
-- `GET /preferences` - Simple, only fetch user settings
+- `GET /preferences` - Simple, cuma fetch user settings
 - `GET /assessment` - Complex, fetch + generate + combine data
 
 Buat `backend/src/routes/assessment.routes.ts`:
@@ -439,11 +439,11 @@ export default router;
 
 ## Controllers Layer
 
-### 🤔 Why We Need Controllers?
+### 🤔 Kenapa Kita Butuh Controllers?
 
-**Problem**: Mixing HTTP logic dengan business logic = messy code
+**Problem**: Mixing HTTP logic dengan business logic = kode berantakan
 ```typescript
-// ❌ BAD: Everything in route handler
+// ❌ BURUK: Semuanya di route handler
 app.get('/assessment', async (req, res) => {
   // HTTP validation
   if (!req.query.user_id) return res.status(400).json({error: '...'});
@@ -458,9 +458,9 @@ app.get('/assessment', async (req, res) => {
 });
 ```
 
-**Solution**: Separate concerns dengan layers
+**Solution**: Pisahkan concern dengan layers
 ```typescript
-// ✅ GOOD: Clear separation
+// ✅ BAGUS: Clear separation
 // Route: Define URL pattern
 router.get('/assessment', getAssessment);
 
@@ -475,30 +475,30 @@ export const getAssessment = async (req, res) => {
 
 // Service: Pure business logic
 export const fetchAssessmentData = async (userId) => {
-  // Focus on WHAT to do, not HTTP stuff
+  // Focus on APA yang mau dilakuin, bukan HTTP stuff
 };
 ```
 
 **Benefits**:
 - 🎯 Controller = HTTP layer (request/response/validation)
 - 💼 Service = Business logic (reusable, testable)
-- 🧪 Easy to unit test services (no HTTP mocking needed)
-- 🔄 Services can be called from controllers, CLI, cron jobs, etc.
+- 🧪 Gampang unit test services (gak perlu HTTP mocking)
+- 🔄 Services bisa dipanggil dari controllers, CLI, cron jobs, dll
 
 ### Controller Responsibilities
 
-✅ **Controller SHOULD**:
-- Validate request parameters
-- Extract data from `req.query`/`req.body`
+✅ **Controller HARUS**:
+- Validasi request parameters
+- Extract data dari `req.query`/`req.body`
 - Call service layer functions
 - Send HTTP responses (status codes + JSON)
-- Catch errors and pass to error middleware
+- Catch errors dan pass ke error middleware
 
-❌ **Controller SHOULD NOT**:
+❌ **Controller JANGAN**:
 - Make external API calls directly
 - Contain complex business logic
-- Parse HTML or process data
-- Know about Gemini API or database details
+- Parse HTML atau process data
+- Tahu tentang Gemini API atau database details
 
 Controller handle HTTP request/response, validasi input, call service layer.
 
@@ -567,11 +567,11 @@ export const getAssessment = async (req: Request, res: Response, next: NextFunct
 
 ## Services Layer: Business Logic
 
-### 🤔 Why We Need Service Layer?
+### 🤔 Kenapa Kita Butuh Service Layer?
 
 **Problem**: Semua logic di controller = tidak reusable
 ```typescript
-// ❌ BAD: Logic stuck in HTTP context
+// ❌ BURUK: Logic terjebak di HTTP context
 app.get('/assessment', async (req, res) => {
   const html = await fetch('dicoding...');
   const text = parseHTML(html);
@@ -582,12 +582,12 @@ app.get('/assessment', async (req, res) => {
 // Mau pakai logic yang sama di CLI script?
 // Mau pakai di cron job?
 // Mau unit test tanpa HTTP?
-// CANNOT! Logic tied to Express req/res
+// GAK BISA! Logic terikat ke Express req/res
 ```
 
 **Solution**: Extract pure business logic ke service
 ```typescript
-// ✅ GOOD: Reusable, testable business logic
+// ✅ BAGUS: Reusable, testable business logic
 // Service (pure function, no HTTP)
 export const fetchAssessmentData = async (userId, tutorialId) => {
   const html = await fetch('dicoding...');
@@ -602,20 +602,20 @@ app.get('/assessment', async (req, res) => {
   res.json(data);
 });
 
-// CLI script (reuse same logic!)
+// CLI script (reuse logic yang sama!)
 const data = await fetchAssessmentData('user123', 'tutorial456');
 console.log(data);
 
-// Unit test (no HTTP mocking!)
+// Unit test (tanpa HTTP mocking!)
 const result = await fetchAssessmentData('testUser', 'testTutorial');
 expect(result.questions).toHaveLength(3);
 ```
 
 **Benefits**:
-- 🔄 **Reusable**: Can be called from controllers, CLI, cron jobs, tests
-- 🧪 **Testable**: Pure functions, easy to unit test
-- 🎯 **Single Responsibility**: Each service does ONE thing well
-- 🧩 **Composable**: Services can call other services
+- 🔄 **Reusable**: Bisa dipanggil dari controllers, CLI, cron jobs, tests
+- 🧪 **Testable**: Pure functions, gampang di unit test
+- 🎯 **Single Responsibility**: Tiap service melakukan SATU hal dengan baik
+- 🧩 **Composable**: Services bisa call services lain
 
 ### Service Architecture Pattern
 
@@ -628,10 +628,10 @@ Coordinates multiple services:
     └─→ htmlParser.ts (Data transformer)
 ```
 
-**Why this pattern?**
-- `assessment.service` = **Business logic** (orchestrate the flow)
-- `dicoding.service` = **External API** (talk to Dicoding)
-- `gemini.service` = **AI integration** (talk to Gemini)
+**Kenapa pattern ini?**
+- `assessment.service` = **Business logic** (orchestrate alur kerja)
+- `dicoding.service` = **External API** (bicara ke Dicoding)
+- `gemini.service` = **AI integration** (bicara ke Gemini)
 - `htmlParser` = **Data transformation** (HTML → text)
 
 Services contain core business logic, external API calls, data processing.

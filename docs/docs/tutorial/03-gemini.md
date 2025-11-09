@@ -31,10 +31,10 @@ assessment.service.ts
 6. Send to frontend
 ```
 
-**Why in assessment.service flow?**
-- Gemini needs **clean text input** (not HTML)
-- Gemini generates **only questions** (not preferences)
-- Assessment service **orchestrates** all data sources
+**Kenapa di alur assessment.service?**
+- Gemini butuh **clean text input** (bukan HTML)
+- Gemini generate **cuma questions** (bukan preferences)
+- Assessment service **orchestrate** semua data sources
 
 ## Apa itu Gemini AI?
 
@@ -46,38 +46,38 @@ assessment.service.ts
 
 ## Kenapa Gemini?
 
-### 🤔 Why Not Just Write Questions Manually?
+### 🤔 Kenapa Gak Bikin Soal Manual Aja?
 
-**Problem**: Manual question creation doesn't scale
+**Problem**: Bikin soal manual gak scalable
 ```
-1 tutorial = 30 minutes to write 3 questions
-100 tutorials = 3,000 minutes = 50 hours!
-```
-
-**Solution**: AI generates questions instantly
-```
-1 tutorial = ~15 seconds with Gemini
-100 tutorials = 25 minutes total
+1 tutorial = 30 menit untuk nulis 3 soal
+100 tutorials = 3,000 menit = 50 jam!
 ```
 
-### 🤔 Why Gemini Specifically?
+**Solution**: AI generate soal secara instant
+```
+1 tutorial = ~15 detik pakai Gemini
+100 tutorials = 25 menit total
+```
 
-**Comparison with alternatives**:
+### 🤔 Kenapa Gemini Specifically?
+
+**Perbandingan dengan alternatif lain**:
 
 | Feature | Gemini 2.5 Flash | GPT-4 | Claude |
 |---------|------------------|-------|--------|
-| **Speed** | ~10-15s | ~20-30s | ~15-20s |
+| **Kecepatan** | ~10-15s | ~20-30s | ~15-20s |
 | **Structured Output** | ✅ Native (Type enum) | ✅ (json_schema) | ✅ (tool use) |
-| **Indonesian Support** | ✅ Excellent | ✅ Good | ✅ Good |
-| **Free Tier** | ✅ 60 req/min | ❌ No free tier | ❌ No free tier |
-| **Cost (per 1M tokens)** | $0.075 | $10 | $3 |
+| **Support Bahasa Indonesia** | ✅ Excellent | ✅ Good | ✅ Good |
+| **Free Tier** | ✅ 60 req/min | ❌ Gak ada free tier | ❌ Gak ada free tier |
+| **Harga (per 1M tokens)** | $0.075 | $10 | $3 |
 
-**Why we chose Gemini**:
-1. **Fast**: Response ~10-15 detik (lebih cepat dari GPT-4)
+**Kenapa kita pilih Gemini**:
+1. **Cepat**: Response ~10-15 detik (lebih cepat dari GPT-4)
 2. **Structured Output**: Bisa generate JSON langsung dengan schema validation (Type enum)
 3. **Affordable**: Free tier 60 requests/minute (cukup untuk development)
 4. **Multilingual**: Bagus untuk Bahasa Indonesia
-5. **Google AI Studio**: Easy testing interface sebelum coding
+5. **Google AI Studio**: Interface gampang untuk testing sebelum coding
 
 ## Dapatkan API Key
 
@@ -127,43 +127,43 @@ npm install @google/genai@1.28.0
 
 ## Buat Gemini Service
 
-### 🤔 Why Separate Service File?
+### 🤔 Kenapa File Service Terpisah?
 
-**Problem**: Gemini logic scattered everywhere
+**Problem**: Logic Gemini berceceran di mana-mana
 ```typescript
-// ❌ BAD: Gemini code in controller
+// ❌ BURUK: Kode Gemini di controller
 app.get('/assessment', async (req, res) => {
   const ai = new GoogleGenAI({apiKey: '...'});
   const response = await ai.models.generateContent({...});
-  // ... lots of Gemini-specific code
+  // ... banyak kode spesifik Gemini
 });
 
-// ❌ BAD: Gemini code in assessment.service
+// ❌ BURUK: Kode Gemini di assessment.service
 export const fetchAssessmentData = async () => {
   const ai = new GoogleGenAI({apiKey: '...'});
-  // ... mixing Gemini with business logic
+  // ... campur Gemini dengan business logic
 };
 ```
 
 **Solution**: Dedicated gemini.service.ts
 ```typescript
-// ✅ GOOD: Single responsibility
-// gemini.service.ts - ONLY Gemini AI concerns
+// ✅ BAGUS: Single responsibility
+// gemini.service.ts - HANYA concern Gemini AI
 export const generateAssessmentQuestions = async (text: string) => {
-  // All Gemini logic here
+  // Semua logic Gemini di sini
 };
 
 // assessment.service.ts - Business logic
 export const fetchAssessmentData = async () => {
   const text = parseHTML(html);
-  const questions = await generateAssessmentQuestions(text); // Clean!
+  const questions = await generateAssessmentQuestions(text); // Bersih!
 };
 ```
 
 **Benefits**:
-- 🎯 **Single Responsibility**: File only cares about Gemini
+- 🎯 **Single Responsibility**: File ini cuma peduli tentang Gemini
 - 🔄 **Reusable**: Bisa generate questions untuk use case lain
-- 🧪 **Testable**: Easy to mock Gemini responses
+- 🧪 **Testable**: Gampang mock Gemini responses
 - 🔧 **Maintainable**: Ganti ke AI lain? Cuma edit 1 file
 
 ### Service Structure
@@ -489,14 +489,14 @@ Expected output:
 curl "http://localhost:4000/api/v1/assessment?tutorial_id=35363&user_id=1"
 ```
 
-**Process flow**:
+**Alur proses**:
 1. Backend fetch tutorial HTML dari Dicoding mock API (~1s)
 2. Parse HTML ke clean text (~0.1s)
-3. Send text ke Gemini AI (~12-15s) ← **This takes time!**
+3. Send text ke Gemini AI (~12-15s) ← **Ini yang lama!**
 4. Parse response JSON (~0.1s)
 5. Return ke client
 
-Expected response:
+Output yang diharapkan:
 ```json
 {
   "assessment": {

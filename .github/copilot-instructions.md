@@ -1,83 +1,210 @@
-# LearnCheck! AI Coding Assistant Guide
+# LearnCheck! AI Quiz Generator
 
-Essential knowledge for AI agents working with the LearnCheck! codebase.
+AI-powered quiz generator using Gemini 2.5 Flash for Dicoding tutorials. Monorepo deployed on Vercel with React frontend + Express backend.
 
 ## Architecture Overview
 
-**Dual Frontend Setup**: This monorepo has TWO frontend implementations:
-1. **Root (`index.tsx`)**: 797-line single-file React app with embedded services - used for quick prototyping
-2. **`frontend/` directory**: Structured React app with proper separation of concerns - **production implementation**
+**Monorepo Structure** (`vercel.json` handles routing)
+- `frontend/` → React 18 + Vite + Zustand (dev: port 5173)
+- `backend/` → Express + TypeScript API (dev: port 4000, prod: Vercel serverless)
+- Route pattern: `/api/*` → backend, everything else → frontend static files
 
-**Backend**: Node.js/Express API in `backend/` providing assessment generation endpoints.
-
-**Data Flow**: Frontend → Backend API (`/api/v1/assessment`) → Dicoding Mock Service (content scraping) + Gemini AI (question generation) → Frontend
-
-**Deployment**: Vercel-optimized monorepo. `vercel.json` rewrites `/api/*` to backend, all else to frontend.
+**Data Flow** (end-to-end)
+```
+User opens quiz → Frontend calls /api/v1/assessment
+  ↓
+Backend fetches tutorial HTML (Dicoding API) + user preferences in parallel
+  ↓
+Parse HTML → Extract text → Send to Gemini with structured schema
+  ↓
+Return 3 questions (Indonesian) → Frontend displays + persists to localStorage
+```
 
 ## Critical Patterns
 
-### Gemini API Integration (`backend/src/services/gemini.service.ts`)
-- Uses `@google/genai` package (NOT `@google/generative-ai`)
-- API initialization: `new GoogleGenAI({apiKey: process.env.GEMINI_API_KEY})`
-- Structured output with JSON schema using `Type` enum for validation (see `assessmentSchema`)
-- Model: `gemini-2.5-flash` configured in `backend/src/config/constants.ts`
-- Model call: `ai.models.generateContent()` with `responseMimeType: "application/json"`
-- **Language**: All questions/explanations MUST be in Indonesian (Bahasa Indonesia)
-- **Question format**: 3 multiple-choice questions, 4 options each
-- **Explanation format**: Must end with "Hint:" followed by specific learning recommendation
+### 1. Gemini AI with Structured Output (backend/src/services/gemini.service.ts)
 
-### State Management (`frontend/src/store/useQuizStore.ts`)
-- **Zustand with dynamic localStorage keys**: Uses `storageKey` pattern `learncheck-${userId}-${tutorialId}`
-- **Critical**: `initialize()` method must be called before quiz starts to set correct storage key and load persisted progress
-- Custom storage proxy (`dynamicStorage`) allows per-user/per-tutorial state isolation
-- **Why proxy pattern**: Zustand's `persist` middleware can't access dynamic state in `getStorage()`, so we use a proxy that references `get()` function
-- State includes: questions, currentQuestionIndex, selectedAnswers, submittedAnswers, quizOver, revealAnswers
+**MUST USE:** `@google/genai` v1.28.0 (NOT `@google/generative-ai` - old package!)
 
-### Backend Service Architecture
-- **Parallel data fetching**: `assessment.service.ts` uses `Promise.all()` to fetch tutorial content and user preferences simultaneously
-- **HTML parsing**: `cheerio` library extracts clean text from Dicoding HTML (see `htmlParser.ts`)
-- **Route structure**: `/api/v1` prefix in `app.ts`, routes organized in `routes/index.ts`
-- **Two entry points**: `server.ts` for local dev (with `app.listen()`), `index.ts` for Vercel (exports app only)
+```typescript
+import { GoogleGenAI, Type } from '@google/genai';
 
-### Caching Strategy (Redis - Optional)
-- **Note**: Redis caching code removed but infrastructure mentioned in `REDIS.md`
-- `skipCache` parameter kept in API for compatibility but not actively used
-````markdown
-# LearnCheck! — Copilot instructions (concise)
+const response = await ai.models.generateContent({
+  model: 'gemini-2.5-flash',
+  contents: prompt,
+  config: {
+    responseMimeType: 'application/json',
+    responseSchema: assessmentSchema  // Enforces 3 questions × 4 choices
+  }
+});
+```
 
-This short guide helps AI coding agents be productive in this repo. Focus on the files and patterns below when making changes.
+**Why Schema Matters:** Without schema, AI returns unpredictable formats (inconsistent keys, varying structure). Schema forces exact structure every time.
 
-1. Architecture (quick)
-	- `frontend/` — production React + Vite app (use this for UI changes).
-	- `backend/` — Express TypeScript API exposing `/api/v1/*`.
-	- Vercel: `vercel.json` routes `/api/*` to the backend serverless function (backend must export the Express app; DO NOT call `app.listen()` in `index.ts`).
+**Output Rules** (see lines 75-95):
+- All content MUST be Indonesian (casual but professional tone)
+- Explanation format: `"Main explanation. Hint: Study recommendation."`
+- Frontend splits on `"Hint:"` for separate display sections
+- Prompt engineering is highly specific to ensure consistency
 
-2. Key developer commands
-	- Frontend dev: `cd frontend && npm install && npm run dev` (Vite on :5173)
-	- Backend dev: `cd backend && npm install && npm run dev` (uses `ts-node-dev` and runs `src/server.ts` on :4000)
-	- Build backend: `cd backend && npm run build` (outputs `dist`)
+### 2. Zustand + Dynamic localStorage Proxy (frontend/src/store/useQuizStore.ts)
 
-3. Critical project patterns
-	- Gemini integration: `backend/src/services/gemini.service.ts`. Uses `@google/genai` and model name defined in `backend/src/config/constants.ts` (e.g. `gemini-2.5-flash`). Keep outputs JSON-parseable.
-	- Two backend entrypoints: `server.ts` (local dev, calls `app.listen`) and `index.ts` (Vercel export — no listen()).
-	- Zustand storage: `frontend/src/store/useQuizStore.ts` uses a dynamic localStorage key pattern `learncheck-${userId}-${tutorialId}`. Call `initialize(userId, tutorialId)` before starting a quiz.
-	- HTML parsing: `backend/src/utils/htmlParser.ts` uses `cheerio` to extract tutorial text before sending to Gemini.
+**The Problem:** Zustand's `persist` middleware can't access dynamic state inside `getStorage()` function.
 
-4. Environment and integration
-	- Required env (backend): `GEMINI_API_KEY`; optional `REDIS_URL` (see `REDIS.md`).
-	- Dicoding mock service base URL is in `backend/src/config/constants.ts` — use existing endpoints for tutorial content and user prefs during dev.
+**The Solution:** Proxy storage object with reference to `get()` function:
 
-5. Editing guidance and examples
-	- If touching AI code: run local generation flow (frontend -> backend `/assessment`) and inspect logs in backend (`console.log` statements present in services).
-	- When changing backend exports for Vercel, ensure `backend/src/index.ts` exports `app` (not `listen`). See `backend/src/server.ts` for local usage.
-	- For UI text and hint format: generated item explanations expect an explanation that ends with `Hint:`; frontend splits on `Hint:` in `frontend/src/App.tsx`.
+```typescript
+const dynamicStorage = {
+  _get: (() => ({})) as () => QuizState & QuizActions,  // Replaced later
+  getItem: (name) => localStorage.getItem(dynamicStorage._get().storageKey || name),
+  setItem: (name, value) => localStorage.setItem(dynamicStorage._get().storageKey || name, value),
+  // ...
+};
+```
 
-6. Conventions
-	- TypeScript strict mode is used. Keep explicit types for exported functions and API responses.
-	- No test runner configured; add tests if you modify critical orchestration logic.
+**Why This Works:** Proxy references `_get()` which gets replaced with store's actual `get()` function, enabling dynamic storage key access.
 
-Files to check first: `backend/src/services/gemini.service.ts`, `backend/src/services/assessment.service.ts`, `backend/src/config/constants.ts`, `frontend/src/store/useQuizStore.ts`, `frontend/src/hooks/useQuizData.ts`, `vercel.json`.
+**Storage Key Pattern:** `learncheck-${userId}-${tutorialId}` (per-user per-tutorial isolation)
 
-If anything here is unclear or you want more detail about a specific flow (e.g., generation, caching, embedding), tell me which area and I will expand with concrete examples and code snippets.
-````
+**Initialize Flow:**
+1. Call `initialize(userId, tutorialId)` before quiz starts (REQUIRED)
+2. Generate storage key → Check localStorage for existing state
+3. Restore previous progress OR start fresh with default state
 
+**Persistence Strategy:**
+- ✅ Persisted: `selectedAnswers`, `submittedAnswers`, `currentQuestionIndex`, `quizOver`
+- ❌ NOT persisted: `questions` (always fresh from backend), `revealAnswers` (UI state only)
+
+### 3. Dual Entry Points for Vercel Serverless (backend/)
+
+**GOTCHA:** Vercel serverless functions CANNOT call `.listen()`
+
+```typescript
+// ❌ WRONG - backend/src/index.ts (Vercel entry)
+app.listen(4000);  // ERROR! Vercel handles this automatically
+
+// ✅ CORRECT - backend/src/index.ts
+export default app;  // Just export, Vercel wraps it
+
+// ✅ CORRECT - backend/src/server.ts (local dev only)
+app.listen(4000);  // OK for development
+```
+
+**Environment Loading GOTCHA:** `dotenv.config()` MUST be at the top of `app.ts` before ANY imports. Why? `gemini.service.ts` reads `process.env.GEMINI_API_KEY` during module initialization. If `dotenv` loads later, API key won't be available.
+
+**Service Layer Architecture:**
+- `assessment.service.ts` → Orchestrator (coordinates all services)
+- `gemini.service.ts` → AI generation with structured output
+- `dicoding.service.ts` → External API client (tutorial content + user prefs)
+
+**Performance Pattern:** Use `Promise.all()` for parallel fetching:
+```typescript
+// ✅ Fast (~1.5s) - parallel
+const [tutorialHtml, userPreferences] = await Promise.all([
+  getTutorialContent(tutorialId),
+  getUserPreferences(userId)
+]);
+
+// ❌ Slow (~3s) - sequential
+const html = await getTutorialContent(tutorialId);      // wait 1.5s
+const prefs = await getUserPreferences(userId);         // wait 1.5s more
+```
+
+### 4. Real-Time Preferences Without Blocking Quiz (frontend/src/hooks/useQuizData.ts)
+
+**Key UX Pattern:** User preferences (theme, font size) must update silently without disrupting active quiz.
+
+```typescript
+if (questions.length > 0 && !silentUpdate) {
+  console.log('Skipping fetch - quiz in progress');
+  return;  // Don't interrupt user!
+}
+```
+
+**Event-Driven Updates:**
+- Listen to `postMessage` events from parent window (Dicoding iframe)
+- React to `focus` events for cross-tab synchronization
+- Debounce 500ms to prevent rapid-fire requests (`QUIZ_CONFIG.DEBOUNCE_MS`)
+- Add timestamp to requests for cache busting
+
+**Three Update Triggers:**
+1. First load → Fetch with loading spinner
+2. User changes settings in Dicoding → `postMessage` triggers silent update
+3. User returns to tab → `focus` event triggers silent update
+
+## Development Workflows
+
+**Local Setup:**
+```bash
+# Terminal 1 - Backend
+cd backend
+npm install
+cp .env.example .env  # Add GEMINI_API_KEY
+npm run dev  # Runs ts-node-dev on src/server.ts → http://localhost:4000
+
+# Terminal 2 - Frontend
+cd frontend
+npm install
+npm run dev  # Vite dev server → http://localhost:5173
+```
+
+**Environment Variables** (backend `.env`):
+```env
+GEMINI_API_KEY=AIzaSy...  # REQUIRED - Get from https://ai.google.dev/
+REDIS_URL=rediss://...     # OPTIONAL - See REDIS.md (12x faster caching)
+PORT=4000                  # OPTIONAL - Defaults to 4000
+```
+
+**Testing API Locally:**
+```bash
+curl http://localhost:4000/  # Health check
+curl "http://localhost:4000/api/v1/preferences?user_id=1"
+curl "http://localhost:4000/api/v1/assessment?tutorial_id=35363&user_id=1"  # ~15s
+curl "http://localhost:4000/api/v1/assessment?tutorial_id=35363&user_id=1&fresh=true"
+```
+
+**Build for Production:**
+```bash
+cd backend && npm run build   # TypeScript → dist/
+cd frontend && npm run build  # Vite build → dist/
+```
+
+## Common Editing Scenarios
+
+**Modifying AI Prompt/Schema:**
+1. Edit `backend/src/services/gemini.service.ts` → Update `assessmentSchema` or prompt text
+2. Ensure schema matches `Assessment` type in `backend/src/types/index.ts`
+3. Test locally, watch console logs for generation flow and timing
+
+**Adding New API Endpoint:**
+1. Create controller function in `backend/src/controllers/`
+2. Define route in `backend/src/routes/` and register in `routes/index.ts`
+3. Add endpoint constant to `frontend/src/config/constants.ts`
+4. Implement API call in `frontend/src/services/api.ts`
+
+**Deploying to Vercel:**
+- Verify `backend/src/index.ts` only exports `app` (no `.listen()` call)
+- Test serverless locally: `vercel dev` in project root
+- `vercel.json` defines build commands and route rewrites for monorepo
+
+## Key Files Reference
+
+| File | Purpose | Critical Pattern |
+|------|---------|------------------|
+| `backend/src/services/gemini.service.ts` | AI generation | Structured output schema enforcement |
+| `backend/src/services/assessment.service.ts` | Service orchestration | Parallel fetching with Promise.all() |
+| `backend/src/app.ts` | Express app setup | dotenv.config() FIRST before imports |
+| `backend/src/index.ts` | Vercel entry point | Export only, NO .listen() |
+| `backend/src/server.ts` | Local dev entry | Has .listen() for development |
+| `frontend/src/store/useQuizStore.ts` | State management | Dynamic storage proxy pattern |
+| `frontend/src/hooks/useQuizData.ts` | Data fetching | Silent updates during quiz |
+| `vercel.json` | Deployment config | Monorepo routing rules |
+
+## Conventions & Patterns
+
+- **TypeScript:** Strict mode enabled, explicit types for all exports and API responses
+- **Logging:** Extensive `console.log` statements in services for debugging (not removed in production)
+- **Error Handling:** Silent failures during quiz, visible errors only on initial load
+- **Indonesian Content:** All AI-generated quiz content in Bahasa Indonesia (casual + professional tone)
+- **No Tests Yet:** Add tests if modifying critical orchestration or state logic
+- **Tutorial Docs:** Full Indonesian tutorials in `docs/docs/tutorial/` (7 step-by-step files)
