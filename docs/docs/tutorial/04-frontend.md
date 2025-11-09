@@ -114,6 +114,76 @@ Main App
 
 ## Kenapa React + Vite?
 
+## Step-by-step: How to create `useQuizData.ts` (the hook)
+
+1. Create the file and imports
+
+```ts
+// frontend/src/hooks/useQuizData.ts
+import { useState, useEffect, useCallback, useRef } from 'react';
+import api from '../services/api';
+import { AssessmentData } from '../types';
+import { useQuizStore } from '../store/useQuizStore';
+import { QUIZ_CONFIG, API_ENDPOINTS } from '../config/constants';
+```
+
+Why: `useQuizData` sits between the API and the UI. It fetches preferences, triggers quiz generation, and coordinates with `useQuizStore` so both data and UI stay consistent.
+
+2. Responsibilities of the hook
+
+- Fetch user preferences (initial load + on demand)
+- Listen to `postMessage` events and `focus` events to refresh preferences
+- Respect quiz progress (do not interrupt an in-progress quiz; use `silentUpdate`)
+- Trigger quiz generation via API and set returned assessment into local state
+- Expose flags: `isLoadingPreferences`, `isGeneratingQuiz`, `error` and functions `generateQuiz()` and `refetchPreferences()`
+
+3. Key implementation details (map to functions you'll implement)
+
+- `fetchPreferences(forceRefresh = false, silentUpdate = false)`
+  - Adds cache-busting param (`_t`) when fetching
+  - Uses debounce (`QUIZ_CONFIG.DEBOUNCE_MS`) to avoid repeated fetches
+  - When `silentUpdate` is true, it updates preferences without toggling a loading UI (used during quiz)
+
+- `generateQuiz(isRetry = false)`
+  - Calls `GET /api/v1/assessment` with `tutorial_id` and `user_id`
+  - Uses `fresh=true` when retrying to bypass any cache
+  - Sets `assessmentData` local state (the hook does not persist answers — store handles that)
+
+- `useEffect` for `postMessage` listener
+  - On `preference-updated` message: schedule a debounced `fetchPreferences(true, isInQuiz)`
+
+- `useEffect` for window `focus`
+  - On focus, run a silent refresh if quiz in progress, or normal refresh if idle
+
+4. How the hook talks to the store (`useQuizStore`)
+
+- The hook reads `questions = useQuizStore(state => state.questions)` only to determine whether a quiz is in progress and therefore whether to run silent updates.
+- After `generateQuiz()` receives `assessment` from backend, the hook calls `useQuizStore.getState().initialize(userId, tutorialId)` (if not initialized) and `useQuizStore.getState().setQuestions(assessment.questions)` to store questions and enable persistence.
+
+Why not let the hook fully manage questions? Separation of concerns:
+- Hook = data fetching and ephemeral UI flags
+- Store = persistent quiz state and user interactions
+
+5. Minimal API usage example inside the hook
+
+```ts
+const response = await api.get(API_ENDPOINTS.ASSESSMENT, { params: { tutorial_id: tutorialId, user_id: userId } });
+setAssessmentData(response.data);
+// Persist questions into the store
+useQuizStore.getState().initialize(userId, tutorialId);
+useQuizStore.getState().setQuestions(response.data.assessment.questions);
+```
+
+6. Tests and manual checks
+
+- Manual: open the app, call `generateQuiz()` from console and verify `useQuizStore.getState().questions` is populated.
+- Unit test idea: mock `api.get` responses and assert hook returns correct flags and exposes `generateQuiz`.
+
+---
+
+Add this hook after you have the store in place so you can call `initialize()` and `setQuestions()` immediately after generation.
+
+
 ### React
 - **Component-based**: UI dipecah jadi small, reusable components
 - **Declarative**: Kamu describe apa yang mau ditampilin, React handle sisanya

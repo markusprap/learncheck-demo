@@ -297,6 +297,76 @@ export const useQuizStore = create<QuizState & QuizActions>()(
 );
 ```
 
+### Step-by-step: How to create `useQuizStore.ts`
+
+1. Create the file and import dependencies
+
+```ts
+// frontend/src/store/useQuizStore.ts
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { Question } from '../types';
+```
+
+Why: These imports give you the store builder (`create`), persistence middleware (`persist`) and a JSON storage wrapper so we can plug our dynamic storage proxy.
+
+2. Define state and actions types
+
+```ts
+type QuizState = { questions: Question[]; currentQuestionIndex: number; selectedAnswers: Record<string,string>; submittedAnswers: Record<string,boolean>; quizOver: boolean; revealAnswers: boolean; storageKey: string; };
+type QuizActions = { setQuestions: (q: Question[]) => void; selectAnswer: (qid: string, optId: string) => void; submitAnswer: (qid: string) => void; nextQuestion: () => void; finishQuiz: () => void; reset: () => void; initialize: (userId: string, tutorialId: string) => void; };
+```
+
+Why: Explicit types make the store predictable and enable IDE autocomplete. `initialize` is important because the storage key is dynamic per user+tutorial.
+
+3. Implement `dynamicStorage` proxy
+
+```ts
+// dynamicStorage provides getItem/setItem/removeItem but delegates to current store.get()
+const dynamicStorage = { _get: (() => ({})) as () => QuizState & QuizActions, getItem(name){ const s = dynamicStorage._get(); return localStorage.getItem(s.storageKey || name); }, setItem(name, value){ const s = dynamicStorage._get(); localStorage.setItem(s.storageKey || name, value); }, removeItem(name){ const s = dynamicStorage._get(); localStorage.removeItem(s.storageKey || name); } };
+```
+
+Why: Zustand's `persist` cannot access the store `get` during initialization; a proxy lets the store set its own `get` into the proxy so the storage methods can resolve the current dynamic key at runtime.
+
+4. Create the store with `persist(...)`
+
+```ts
+export const useQuizStore = create<QuizState & QuizActions>()(
+  persist((set, get) => { dynamicStorage._get = get; return { /* initial state + actions */ } }, { name: 'quiz-storage', storage: createJSONStorage(() => dynamicStorage), partialize: state => ({ currentQuestionIndex: state.currentQuestionIndex, selectedAnswers: state.selectedAnswers, submittedAnswers: state.submittedAnswers, quizOver: state.quizOver }) })
+);
+```
+
+Why: We wire `dynamicStorage._get = get;` so the proxy can find the `storageKey`. `partialize` controls what gets persisted (we don't persist ephemeral flags like `revealAnswers`).
+
+5. Key actions to implement (what they do)
+
+- `initialize(userId, tutorialId)` — compute `learncheck-${userId}-${tutorialId}`; if different from current `storageKey`, load saved state from `localStorage` and set it, otherwise no-op. Ensures per-user-per-tutorial isolation.
+- `setQuestions(questions)` — set the questions array and reset quiz progress flags (fresh start).
+- `selectAnswer(questionId, optionId)` — record selected answer unless already submitted.
+- `submitAnswer(questionId)` — mark question as submitted (used to prevent changing answer after submit).
+- `nextQuestion()` — advance `currentQuestionIndex`; set `quizOver` when reaching the end.
+- `finishQuiz()` — mark `quizOver = true`.
+- `reset()` — clear progress but keep `storageKey`.
+
+Why: Listing these responsibilities helps implementers know what to code and why.
+
+6. Persistence details
+
+- The store uses `createJSONStorage(() => dynamicStorage)` so persisted data is written/read using the current `storageKey`.
+- On `initialize`, we manually load saved state from localStorage for the new key and merge it into the current state to avoid losing progress when switching users or tutorials.
+
+Why: This guarantees the persisted state belongs to the correct user+tutorial and avoids conflicts.
+
+7. Testing the store
+
+- Manual test: open frontend, call `useQuizStore.getState().initialize('1','35363')` in console and inspect `localStorage` key `learncheck-1-35363`.
+- Unit test idea: mock `localStorage`, call actions in sequence (setQuestions → selectAnswer → submitAnswer → nextQuestion) and assert state shape.
+
+---
+
+Now that the store is clear, next we'll explain how `useQuizData` consumes the store and where to create the hook.
+
+
 ## Deep Dive: How It Works
 
 ### 1. Storage Proxy Object
